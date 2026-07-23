@@ -2,1898 +2,2119 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f6f4ef" />
-  <title>WatchPick</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#4b2e83" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="MyMap" />
+  <title>MyMap</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.7.1/dist/maplibre-gl.css" />
   <style>
+    /* Critical MapLibre layout rules are included locally. The actual map is
+       drawn in one WebGL canvas, so separate image tiles cannot drift apart. */
+    .maplibregl-map { position: relative; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+    .maplibregl-canvas-container, .maplibregl-canvas { position: absolute; left: 0; top: 0; }
+    .maplibregl-canvas { outline: none; }
+    .maplibregl-control-container { position: absolute; inset: 0; pointer-events: none; }
+    .maplibregl-ctrl-top-left, .maplibregl-ctrl-top-right,
+    .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { position: absolute; pointer-events: none; z-index: 2; }
+    .maplibregl-ctrl-top-left { top: calc(132px + var(--safe-top)); left: 10px; }
+    .maplibregl-ctrl-top-right { top: 0; right: 0; }
+    .maplibregl-ctrl-bottom-left { bottom: 0; left: 0; }
+    .maplibregl-ctrl-bottom-right { right: 0; bottom: 0; }
+    .maplibregl-ctrl { clear: both; pointer-events: auto; transform: translate(0,0); }
+    .maplibregl-marker { position: absolute; top: 0; left: 0; will-change: transform; }
+    .maplibregl-popup { position: absolute; top: 0; left: 0; display: flex; will-change: transform; pointer-events: none; }
+    .maplibregl-popup-content { position: relative; pointer-events: auto; background: white; border-radius: 16px; box-shadow: var(--shadow); padding: 11px 13px; min-width: 150px; }
+
     :root {
-      --bg: #f6f4ef;
-      --surface: #ffffff;
-      --surface-2: #eeece6;
-      --ink: #242621;
-      --muted: #6f746b;
-      --line: #dedfd9;
-      --accent: #607b69;
-      --accent-dark: #42594a;
-      --accent-soft: #dfe9e1;
-      --warm: #a86f55;
-      --gold: #a88135;
-      --danger: #a44f4f;
-      --shadow: 0 12px 35px rgba(35, 39, 33, 0.09);
-      --radius: 20px;
+      --purple: #4b2e83;
+      --purple-2: #6b4aa0;
+      --gold: #b7a57a;
+      --gold-soft: #f3ead1;
+      --ink: #241f2e;
+      --muted: #726b7d;
+      --paper: #ffffff;
+      --bg: #f6f3fb;
+      --danger: #b42318;
+      --success: #247a4a;
+      --shadow: 0 10px 28px rgba(36, 31, 46, 0.16);
+      --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
     * { box-sizing: border-box; }
-    html { background: var(--bg); }
+    html, body { width: 100%; height: 100%; min-height: 100%; margin: 0; overflow: hidden; }
+    @supports (height: 100dvh) {
+      html, body { height: 100dvh; }
+    }
     body {
-      margin: 0;
-      min-height: 100vh;
-      color: var(--ink);
-      background: var(--bg);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      -webkit-font-smoothing: antialiased;
+      background: var(--bg);
+      color: var(--ink);
+      -webkit-tap-highlight-color: transparent;
     }
+    button, input, textarea, select { font: inherit; }
+    button { touch-action: manipulation; }
 
-    button, input, select { font: inherit; }
-    button { color: inherit; }
-    img { display: block; }
-    .hidden { display: none !important; }
-
-    .app-shell {
-      width: min(100%, 980px);
-      min-height: 100vh;
-      margin: 0 auto;
-      padding-bottom: calc(88px + var(--safe-bottom));
-    }
+    #app { position: fixed; inset: 0; width: 100%; height: 100%; min-height: 100%; overflow: hidden; }
+    #map { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 100%; background: #dfe8e3; }
 
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 30;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 68px;
-      padding: 12px 18px;
-      background: rgba(246, 244, 239, 0.94);
-      border-bottom: 1px solid rgba(222, 223, 217, 0.8);
-      backdrop-filter: blur(14px);
-    }
-
-    .brand-wrap { min-width: 0; }
-    .brand {
-      margin: 0;
-      font-size: 1.42rem;
-      font-weight: 760;
-      letter-spacing: -0.035em;
-    }
-    .brand-sub {
-      margin-top: 1px;
-      color: var(--muted);
-      font-size: 0.78rem;
-    }
-
-    .icon-button {
-      width: 43px;
-      height: 43px;
-      flex: 0 0 auto;
-      display: inline-grid;
-      place-items: center;
-      border: 1px solid var(--line);
-      border-radius: 50%;
-      background: var(--surface);
-      cursor: pointer;
-    }
-    .icon-button:active { transform: scale(0.97); }
-
-    main { padding: 20px 16px 24px; }
-    .screen { display: none; }
-    .screen.active { display: block; }
-
-    .hero {
-      padding: 17px 2px 8px;
-    }
-    .eyebrow {
-      margin: 0 0 6px;
-      color: var(--accent-dark);
-      font-size: 0.78rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    h2 {
-      margin: 0;
-      font-size: clamp(1.62rem, 5vw, 2.25rem);
-      letter-spacing: -0.045em;
-      line-height: 1.08;
-    }
-    .hero p, .section-copy {
-      margin: 8px 0 0;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-
-    .panel {
-      margin-top: 16px;
-      padding: 16px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-    }
-
-    .panel.flat { box-shadow: none; }
-    .section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    .section-head h3 {
-      margin: 0;
-      font-size: 1rem;
-      letter-spacing: -0.02em;
-    }
-
-    .segmented {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 4px;
-      padding: 4px;
-      border-radius: 14px;
-      background: var(--surface-2);
-    }
-    .segmented button {
-      min-height: 41px;
-      padding: 8px 10px;
-      border: 0;
-      border-radius: 11px;
-      background: transparent;
-      color: var(--muted);
-      font-weight: 750;
-      cursor: pointer;
-    }
-    .segmented button.active {
-      background: var(--surface);
-      color: var(--ink);
-      box-shadow: 0 2px 8px rgba(35, 39, 33, 0.08);
-    }
-
-    .chip-row {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      padding: 2px 1px 5px;
-      scrollbar-width: none;
-    }
-    .chip-row::-webkit-scrollbar { display: none; }
-    .chip {
-      flex: 0 0 auto;
-      min-height: 38px;
-      padding: 8px 13px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--surface);
-      color: var(--muted);
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .chip.active {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      color: var(--accent-dark);
-    }
-
-    .primary-button, .secondary-button, .danger-button {
-      min-height: 48px;
-      padding: 12px 17px;
-      border-radius: 14px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-    .primary-button {
-      border: 1px solid var(--accent);
-      background: var(--accent);
-      color: white;
-    }
-    .primary-button:hover { background: var(--accent-dark); }
-    .secondary-button {
-      border: 1px solid var(--line);
-      background: var(--surface);
-      color: var(--ink);
-    }
-    .danger-button {
-      border: 1px solid #e4c5c5;
-      background: #fff6f6;
-      color: var(--danger);
-    }
-    .wide { width: 100%; }
-    .button-row { display: flex; gap: 9px; flex-wrap: wrap; }
-    .button-row > * { flex: 1 1 130px; }
-
-    .field-label {
-      display: block;
-      margin: 0 0 7px;
-      color: var(--muted);
-      font-size: 0.8rem;
-      font-weight: 750;
-    }
-    .field, .search-field {
-      width: 100%;
-      min-height: 49px;
-      padding: 12px 14px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      outline: none;
-      background: var(--surface);
-      color: var(--ink);
-    }
-    .field:focus, .search-field:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(96, 123, 105, 0.13);
-    }
-    .search-wrap {
-      position: relative;
-      display: flex;
-      gap: 8px;
-    }
-    .search-wrap .search-field { padding-left: 43px; }
-    .search-symbol {
       position: absolute;
-      left: 15px;
-      top: 50%;
-      transform: translateY(-50%);
+      z-index: 900;
+      top: calc(10px + var(--safe-top));
+      left: 10px;
+      right: 10px;
+      display: flex;
+      gap: 8px;
       pointer-events: none;
-      color: var(--muted);
     }
-    .search-go { flex: 0 0 auto; }
-
-    .suggestion-note {
-      margin-top: 12px;
-      padding: 11px 12px;
-      border-radius: 13px;
-      background: var(--accent-soft);
-      color: var(--accent-dark);
-      font-size: 0.87rem;
-      line-height: 1.4;
-    }
-
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
-      gap: 13px;
-      margin-top: 14px;
-    }
-
-    .media-card {
-      position: relative;
-      min-width: 0;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: 17px;
-      background: var(--surface);
-      box-shadow: 0 6px 18px rgba(35, 39, 33, 0.055);
-    }
-    .media-card button.card-main {
-      width: 100%;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      text-align: left;
-      cursor: pointer;
-    }
-    .poster-wrap {
-      position: relative;
-      aspect-ratio: 2 / 3;
-      background: linear-gradient(145deg, #d9ddd5, #efede8);
-      overflow: hidden;
-    }
-    .poster-wrap img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .poster-fallback {
-      height: 100%;
-      display: grid;
-      place-items: center;
-      padding: 15px;
-      color: var(--muted);
-      font-weight: 800;
-      text-align: center;
-    }
-    .type-badge {
-      position: absolute;
-      left: 9px;
-      top: 9px;
-      padding: 5px 8px;
-      border-radius: 999px;
-      background: rgba(22, 25, 21, 0.78);
-      color: #fff;
-      font-size: 0.68rem;
-      font-weight: 800;
-      backdrop-filter: blur(8px);
-    }
-    .state-badge {
-      position: absolute;
-      right: 9px;
-      top: 9px;
-      width: 29px;
-      height: 29px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      background: rgba(255,255,255,.9);
-      font-size: .86rem;
-    }
-    .card-body { padding: 11px 11px 8px; }
-    .card-title {
-      margin: 0;
-      overflow: hidden;
-      font-size: 0.93rem;
-      font-weight: 820;
-      letter-spacing: -0.02em;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .card-meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 7px;
-      margin-top: 5px;
-      color: var(--muted);
-      font-size: 0.77rem;
-    }
-    .card-reason {
-      min-height: 34px;
-      margin: 7px 0 0;
-      color: var(--muted);
-      font-size: 0.74rem;
-      line-height: 1.3;
-    }
-    .quick-actions {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1px;
-      border-top: 1px solid var(--line);
-      background: var(--line);
-    }
-    .quick-actions button {
-      min-height: 41px;
-      padding: 7px 4px;
-      border: 0;
-      background: var(--surface);
-      color: var(--muted);
-      font-size: 0.76rem;
-      font-weight: 780;
-      cursor: pointer;
-    }
-    .quick-actions button.active {
-      background: var(--accent-soft);
-      color: var(--accent-dark);
-    }
-
-    .person-card .poster-wrap { aspect-ratio: 1 / 1.15; }
-    .person-card .poster-wrap img { object-position: center 20%; }
-
-    .empty-state {
-      padding: 32px 16px;
-      border: 1px dashed #cdd0c8;
-      border-radius: 18px;
-      color: var(--muted);
-      text-align: center;
-      line-height: 1.5;
-    }
-    .empty-icon { font-size: 2rem; margin-bottom: 7px; }
-
-    .loading {
-      display: grid;
-      place-items: center;
-      min-height: 190px;
-      color: var(--muted);
-      text-align: center;
-    }
-    .spinner {
-      width: 34px;
-      height: 34px;
-      margin: 0 auto 12px;
-      border: 4px solid var(--accent-soft);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .bottom-nav {
-      position: fixed;
-      z-index: 35;
-      left: 50%;
-      bottom: 0;
-      transform: translateX(-50%);
-      width: min(100%, 980px);
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      padding: 8px 10px calc(8px + var(--safe-bottom));
-      border-top: 1px solid var(--line);
-      background: rgba(255,255,255,.96);
-      backdrop-filter: blur(15px);
-    }
-    .nav-button {
-      min-height: 53px;
-      border: 0;
-      border-radius: 14px;
-      background: transparent;
-      color: var(--muted);
-      font-size: .72rem;
-      font-weight: 780;
-      cursor: pointer;
-    }
-    .nav-button span {
-      display: block;
-      margin-bottom: 2px;
-      font-size: 1.25rem;
-    }
-    .nav-button.active {
-      background: var(--accent-soft);
-      color: var(--accent-dark);
-    }
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 80;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      background: rgba(20, 23, 19, .48);
-      backdrop-filter: blur(3px);
-    }
-    .modal {
-      width: min(100%, 760px);
-      max-height: 92vh;
-      overflow-y: auto;
-      border-radius: 24px 24px 0 0;
-      background: var(--bg);
-      box-shadow: 0 -20px 60px rgba(0,0,0,.2);
-      animation: slideUp .22s ease-out;
-    }
-    @keyframes slideUp {
-      from { transform: translateY(24px); opacity: .5; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    .modal-handle {
-      width: 42px;
-      height: 5px;
-      margin: 9px auto 4px;
-      border-radius: 999px;
-      background: #c7c9c2;
-    }
-    .modal-top {
-      position: sticky;
-      top: 0;
-      z-index: 4;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 15px;
-      background: rgba(246, 244, 239, .94);
-      backdrop-filter: blur(12px);
-    }
-    .modal-top strong {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .modal-content { padding: 0 16px 28px; }
-
-    .detail-hero {
-      position: relative;
-      min-height: 235px;
-      margin: 0 -16px 18px;
-      overflow: hidden;
-      background: #dfe2db;
-    }
-    .detail-backdrop {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .detail-shade {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to top, rgba(18,22,18,.92), rgba(18,22,18,.15) 65%);
-    }
-    .detail-title-wrap {
-      position: absolute;
-      left: 17px;
-      right: 17px;
-      bottom: 17px;
-      color: #fff;
-    }
-    .detail-title-wrap h2 { font-size: 1.7rem; }
-    .detail-title-wrap p { margin: 5px 0 0; color: rgba(255,255,255,.8); }
-    .overview { line-height: 1.55; }
-    .meta-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin: 12px 0 17px;
-    }
-    .meta-pill {
-      padding: 7px 10px;
-      border-radius: 999px;
-      background: var(--surface-2);
-      color: var(--muted);
-      font-size: .76rem;
-      font-weight: 730;
-    }
-
-    .reaction-row {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(58px, 1fr));
-      gap: 7px;
-      margin: 14px 0 18px;
-    }
-    .reaction-button {
-      min-height: 61px;
-      padding: 7px 3px;
-      border: 1px solid var(--line);
-      border-radius: 13px;
-      background: var(--surface);
-      color: var(--muted);
-      font-size: .67rem;
-      font-weight: 760;
-      cursor: pointer;
-    }
-    .reaction-button span { display: block; font-size: 1.22rem; margin-bottom: 3px; }
-    .reaction-button.active {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-      color: var(--accent-dark);
-    }
-    .reaction-button.bad.active {
-      border-color: #c17878;
-      background: #f6e2e2;
-      color: #803f3f;
-    }
-
-    .cast-row, .provider-row {
-      display: flex;
-      gap: 11px;
-      overflow-x: auto;
-      padding: 2px 1px 7px;
-      scrollbar-width: none;
-    }
-    .cast-row::-webkit-scrollbar, .provider-row::-webkit-scrollbar { display: none; }
-    .cast-card {
-      width: 82px;
-      flex: 0 0 82px;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      text-align: left;
-      cursor: pointer;
-    }
-    .cast-photo {
-      width: 70px;
-      height: 70px;
-      overflow: hidden;
-      border-radius: 50%;
-      background: var(--surface-2);
-    }
-    .cast-photo img { width: 100%; height: 100%; object-fit: cover; }
-    .cast-name {
-      margin-top: 6px;
-      font-size: .73rem;
-      font-weight: 760;
-      line-height: 1.2;
-    }
-    .cast-role {
-      margin-top: 2px;
-      color: var(--muted);
-      font-size: .67rem;
-      line-height: 1.2;
-    }
-    .provider {
+    .brand {
       width: 64px;
+      height: 64px;
       flex: 0 0 64px;
+      padding: 7px 5px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       text-align: center;
-      color: var(--muted);
-      font-size: .67rem;
-      line-height: 1.15;
+      background: rgba(75, 46, 131, 0.96);
+      color: white;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      pointer-events: auto;
+      font-weight: 900;
+      font-size: 22px;
+      letter-spacing: 0;
+      line-height: .95;
     }
-    .provider img {
-      width: 48px;
-      height: 48px;
-      margin: 0 auto 5px;
-      border-radius: 11px;
+    .brand small {
+      display: block;
+      width: 100%;
+      margin-top: 6px;
+      font-size: 8px;
+      font-weight: 800;
+      line-height: 1;
+      text-align: center;
+      opacity: .88;
+      letter-spacing: .08em;
     }
 
-    .list-tabs {
+    .search-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.96);
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(75,46,131,.12);
+      pointer-events: auto;
+    }
+    #searchInput {
+      min-width: 0;
+      flex: 1;
+      border: 0;
+      outline: 0;
+      padding: 8px 5px;
+      color: var(--ink);
+      background: transparent;
+    }
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 13px;
+      background: #f0eaf8;
+      color: var(--purple);
+      font-size: 20px;
+      font-weight: 900;
+    }
+    .icon-btn:active { transform: scale(.96); }
+    .icon-btn.listening { background: #dc3545; color: #ffffff; }
+
+    .jump-strip {
+      position: absolute;
+      z-index: 880;
+      top: calc(84px + var(--safe-top));
+      left: 10px;
+      right: 10px;
       display: flex;
       gap: 7px;
       overflow-x: auto;
-      padding-bottom: 4px;
+      padding: 2px 2px 7px;
       scrollbar-width: none;
+      pointer-events: auto;
     }
-    .list-tabs::-webkit-scrollbar { display:none; }
+    .jump-strip::-webkit-scrollbar { display: none; }
+    .jump-chip {
+      flex: 0 0 auto;
+      min-height: 36px;
+      border: 1px solid rgba(75,46,131,.16);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(255,255,255,.96);
+      color: var(--purple);
+      box-shadow: 0 4px 12px rgba(36,31,46,.13);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .jump-chip:active { transform: scale(.97); }
 
-    .setting-group {
-      margin-bottom: 20px;
-      padding-bottom: 19px;
-      border-bottom: 1px solid var(--line);
-    }
-    .setting-group:last-child { border-bottom: 0; }
-    .setting-group h3 { margin: 0 0 7px; }
-    .help-text {
-      color: var(--muted);
-      font-size: .83rem;
-      line-height: 1.45;
-    }
-    .token-status {
-      margin-top: 8px;
-      font-size: .8rem;
-      font-weight: 750;
-    }
-    .token-status.good { color: var(--accent-dark); }
-    .token-status.bad { color: var(--danger); }
-
-    .service-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .service-choice {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 48px;
-      padding: 8px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: var(--surface);
-      cursor: pointer;
-    }
-    .service-choice.selected {
-      border-color: var(--accent);
-      background: var(--accent-soft);
-    }
-    .service-choice img { width: 31px; height: 31px; border-radius: 8px; }
-    .service-choice span { font-size: .78rem; font-weight: 720; line-height: 1.1; }
-
-    .toast {
-      position: fixed;
-      z-index: 120;
+    .map-tip {
+      position: absolute;
+      z-index: 750;
+      top: calc(180px + var(--safe-top));
       left: 50%;
-      bottom: calc(86px + var(--safe-bottom));
-      transform: translate(-50%, 16px);
-      max-width: calc(100% - 34px);
-      padding: 11px 15px;
-      border-radius: 13px;
-      background: #252a24;
-      color: #fff;
+      transform: translateX(-50%);
+      max-width: calc(100% - 30px);
+      background: rgba(36,31,46,.92);
+      color: white;
+      padding: 8px 13px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 750;
+      box-shadow: 0 5px 18px rgba(0,0,0,.22);
       opacity: 0;
       pointer-events: none;
-      transition: .2s ease;
-      font-size: .84rem;
+      transition: opacity .2s ease, transform .2s ease;
+      text-align: center;
+    }
+    .map-tip.show { opacity: 1; transform: translate(-50%, 3px); }
+
+    .bottom-nav {
+      position: absolute;
+      z-index: 900;
+      left: 10px;
+      right: 10px;
+      bottom: calc(10px + var(--safe-bottom));
+      height: 68px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      padding: 6px;
+      border-radius: 22px;
+      background: rgba(255,255,255,.97);
       box-shadow: var(--shadow);
+      border: 1px solid rgba(75,46,131,.12);
+    }
+    .nav-btn {
+      position: relative;
+      height: 54px;
+      border: 0;
+      border-radius: 16px;
+      background: transparent;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 2px;
+      font-weight: 800;
+      font-size: 10px;
+    }
+    .nav-btn span:first-child { font-size: 22px; line-height: 1; }
+    .nav-btn.active { background: #f0eaf8; color: var(--purple); }
+    .nav-btn.add {
+      width: 58px;
+      height: 58px;
+      justify-self: center;
+      margin-top: -28px;
+      border-radius: 50%;
+      background: var(--purple);
+      color: white;
+      border: 4px solid white;
+      box-shadow: 0 8px 20px rgba(75,46,131,.36);
+    }
+    .nav-btn.add span:first-child { font-size: 28px; }
+
+    .sheet-backdrop {
+      position: absolute;
+      z-index: 1000;
+      inset: 0;
+      background: rgba(30,24,40,.28);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+    }
+    .sheet-backdrop.show { opacity: 1; pointer-events: auto; }
+
+    .sheet {
+      position: absolute;
+      z-index: 1010;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-height: min(84vh, 760px);
+      border-radius: 26px 26px 0 0;
+      background: var(--paper);
+      box-shadow: 0 -16px 40px rgba(36,31,46,.2);
+      transform: translateY(105%);
+      transition: transform .25s ease;
+      padding: 10px 16px calc(18px + var(--safe-bottom));
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+    .sheet.show { transform: translateY(0); }
+    .handle { width: 46px; height: 5px; margin: 0 auto 10px; border-radius: 99px; background: #d8d2df; }
+    .sheet-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .sheet-head h2 { margin: 0; font-size: 22px; flex: 1; }
+    .close-btn { border: 0; background: #eeeaf2; border-radius: 50%; width: 40px; height: 40px; font-size: 22px; }
+
+    .field { margin: 12px 0; }
+    .field label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 850; color: #554d60; }
+    .field input, .field textarea, .field select {
+      width: 100%;
+      border: 1px solid #dcd5e4;
+      border-radius: 14px;
+      padding: 12px 13px;
+      outline: 0;
+      background: #fcfbfd;
+      color: var(--ink);
+    }
+    .field textarea { resize: vertical; min-height: 94px; }
+    .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--purple-2); box-shadow: 0 0 0 3px rgba(75,46,131,.1); }
+
+    .switch-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .switch-card { display: flex; align-items: center; gap: 9px; padding: 11px; border-radius: 14px; background: #f8f5fb; font-weight: 750; font-size: 13px; }
+    .switch-card input { width: 20px; height: 20px; accent-color: var(--purple); }
+
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 16px; }
+    .actions.one { grid-template-columns: 1fr; }
+    .btn {
+      min-height: 48px;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 14px;
+      font-weight: 900;
+      background: #eeeaf2;
+      color: var(--ink);
+    }
+    .btn.primary { background: var(--purple); color: white; }
+    .btn.gold { background: var(--gold-soft); color: #5c4a1f; }
+    .btn.danger { background: #fde9e7; color: var(--danger); }
+    .btn.success { background: #e6f5eb; color: var(--success); }
+    .btn:active { transform: scale(.985); }
+
+    .category-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 0 9px;
+      scrollbar-width: none;
+    }
+    .category-strip::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: 0 0 auto;
+      border: 1px solid #ded6e7;
+      border-radius: 999px;
+      padding: 9px 12px;
+      background: white;
+      font-weight: 800;
+      color: #5e5669;
+    }
+    .chip.active { background: var(--purple); color: white; border-color: var(--purple); }
+
+    .pin-list { display: grid; gap: 9px; padding-bottom: 4px; }
+    .pin-card {
+      display: grid;
+      grid-template-columns: 45px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #e5dfeb;
+      border-radius: 17px;
+      background: #fff;
+      padding: 10px;
+      text-align: left;
+    }
+    .pin-card .emoji { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px; font-size: 23px; background: #f4eff9; }
+    .pin-card h3 { margin: 0 0 3px; font-size: 15px; }
+    .pin-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .pin-card .distance { font-weight: 900; color: var(--purple); font-size: 12px; white-space: nowrap; }
+    .empty { padding: 32px 14px; text-align: center; color: var(--muted); }
+    .empty .big { font-size: 42px; display: block; margin-bottom: 8px; }
+
+    .place-title { display: flex; gap: 12px; align-items: center; }
+    .place-title .big-emoji { width: 54px; height: 54px; border-radius: 17px; background: #f1ebf7; display: grid; place-items: center; font-size: 30px; }
+    .place-title h2 { margin: 0 0 3px; }
+    .place-title p { margin: 0; color: var(--muted); font-size: 13px; }
+    .place-note { margin: 14px 0; padding: 13px; background: #f8f5fb; border-radius: 14px; white-space: pre-wrap; line-height: 1.45; }
+    .stats { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; margin: 12px 0; }
+    .stat { padding: 11px; border: 1px solid #e5dfeb; border-radius: 14px; }
+    .stat strong { display: block; font-size: 15px; color: var(--purple); }
+    .stat small { color: var(--muted); }
+
+    .search-results { display: grid; gap: 8px; margin-top: 10px; }
+    .search-result { border: 1px solid #e3dce9; border-radius: 14px; padding: 11px; background: white; text-align: left; }
+    .search-result strong { display: block; margin-bottom: 3px; }
+    .search-result small { color: var(--muted); line-height: 1.35; }
+    .time-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.15fr); gap: 8px; width: 100%; }
+    .time-row select { width: 100%; min-width: 0; padding-left: 8px; padding-right: 8px; }
+
+    .menu-list { display: grid; gap: 9px; }
+    .menu-item { width: 100%; padding: 13px; border-radius: 14px; border: 1px solid #e3dce9; background: white; text-align: left; font-weight: 800; }
+    .fine-print { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+    .quick-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; margin:10px 0 15px; }
+    .quick-card { min-height:82px; padding:12px 9px; border:1px solid #e3dce9; border-radius:17px; background:#fff; text-align:center; font-weight:850; color:var(--ink); }
+    .quick-card span { display:block; font-size:27px; margin-bottom:5px; }
+    .next-card { padding:15px; border-radius:18px; background:linear-gradient(135deg,#4b2e83,#6b4aa0); color:white; margin:4px 0 14px; }
+    .next-card h3 { margin:0 0 5px; font-size:18px; }
+    .next-card p { margin:3px 0; opacity:.92; }
+    .next-card .btn { margin-top:10px; background:white; color:var(--purple); }
+    .event-card { border:1px solid #e4ddeb; border-radius:17px; padding:12px; margin:9px 0; background:white; }
+    .event-card h3 { margin:0 0 4px; }
+    .event-card p { margin:3px 0; color:var(--muted); font-size:13px; }
+    .event-actions { display:flex; gap:7px; margin-top:9px; }
+    .event-actions .btn { padding:9px; min-height:40px; }
+    .day-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+    .day-check { border:1px solid #ddd4e5; border-radius:12px; padding:8px 4px; text-align:center; font-size:12px; }
+    .day-check input { display:block; margin:0 auto 4px; }
+    .segmented { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:5px; border-radius:14px; background:#f1ebf7; margin:10px 0; }
+    .segmented button { border:0; border-radius:11px; padding:10px; font-weight:850; background:transparent; color:var(--purple); }
+    .segmented button.active { background:white; box-shadow:0 2px 8px rgba(36,31,46,.12); }
+
+    .toast {
+      position: absolute;
+      z-index: 1300;
+      left: 50%;
+      bottom: calc(94px + var(--safe-bottom));
+      transform: translate(-50%, 20px);
+      max-width: calc(100% - 30px);
+      background: rgba(36,31,46,.95);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 750;
     }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-    .setup-card {
-      margin-top: 18px;
-      padding: 20px;
-      border: 1px solid #cfd8d1;
-      border-radius: 20px;
-      background: linear-gradient(145deg, #ffffff, #edf3ee);
+    .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: var(--shadow) !important; }
+    .maplibregl-ctrl-group button { width: 34px; height: 34px; border: 0; background-color: white; }
+    .maplibregl-ctrl-bottom-right { margin-bottom: calc(84px + var(--safe-bottom)) !important; margin-right: 10px !important; }
+    .maplibregl-ctrl-bottom-left { margin-bottom: calc(84px + var(--safe-bottom)) !important; margin-left: 10px !important; }
+    .maplibregl-ctrl-attrib { font-size: 8px; padding: 1px 4px; background: rgba(255,255,255,.55); }
+    .maplibregl-ctrl-attrib a { color: #888; }
+    #findPartnerBtn {
+      position: fixed;
+      right: 10px;
+      bottom: calc(84px + var(--safe-bottom) + 92px);
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      background: #a33b67;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: var(--shadow);
+      z-index: 20;
+      cursor: pointer;
     }
-    .setup-card h3 { margin: 0 0 8px; }
-    .steps {
-      margin: 12px 0 16px;
-      padding-left: 20px;
-      color: var(--muted);
-      line-height: 1.55;
+    #findPartnerBtn.following { background: #6e2a49; box-shadow: 0 0 0 6px rgba(163,59,103,.28), var(--shadow); }
+    #findPartnerBtn:active { transform: scale(.94); }
+    #followMeBtn {
+      position: fixed;
+      right: 10px;
+      bottom: calc(84px + var(--safe-bottom) + 88px);
+      width: 34px;
+      height: 34px;
+      box-sizing: border-box;
+      border-radius: 50%;
+      border: 3px solid var(--purple);
+      background: #ffffff;
+      color: var(--purple);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: var(--shadow);
+      z-index: 20;
+      cursor: pointer;
     }
-    .text-link { color: var(--accent-dark); font-weight: 780; }
+    #followMeBtn.following { background: var(--purple); color: #ffffff; border-color: #ffffff; box-shadow: 0 8px 20px rgba(75,46,131,.36); }
+    #followMeBtn:active { transform: scale(.94); }
+    .follow-me-icon { position: relative; width: 15px; height: 15px; }
+    .follow-me-ring { position: absolute; inset: 0; border: 1.5px solid currentColor; border-radius: 50%; box-sizing: border-box; }
+    .follow-me-dot { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: currentColor; border-radius: 50%; }
+    @media (min-width: 780px) {
+      #followMeBtn { bottom: calc(10px + 88px); }
+    }
+    @media (min-width: 780px) {
+      #findPartnerBtn { bottom: calc(10px + 92px); }
+    }
+    .popup-title { font-weight: 900; margin-bottom: 4px; }
+    .popup-meta { color: var(--muted); font-size: 12px; }
 
-    @media (min-width: 720px) {
-      main { padding-left: 28px; padding-right: 28px; }
-      .cards-grid { grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); }
-      .modal { border-radius: 24px; margin-bottom: 3vh; max-height: 90vh; }
-      .modal-backdrop { align-items: center; padding: 20px; }
+    .map-pin { background: transparent; border: 0; }
+    .pin-bubble {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 50% 50% 50% 10%;
+      transform: rotate(-45deg);
+      border: 3px solid white;
+      box-shadow: 0 4px 11px rgba(36,31,46,.3);
+      background: var(--purple);
     }
+    .pin-bubble > span { transform: rotate(45deg); font-size: 21px; }
+    .pin-bubble.favorite { background: #a33b67; }
+    .pin-bubble.visited { background: #2d7a51; }
+    .transit-marker { background: transparent; border: 0; }
+    .search-pin-wrap { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .search-pin-dot { width: 14px; height: 14px; border-radius: 50%; background: #0f7a6b; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,.35); flex-shrink: 0; }
+    .search-pin-label { background: rgba(255,255,255,.96); padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #0f7a6b; box-shadow: 0 2px 6px rgba(0,0,0,.25); white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+    .transit-bubble { width: 30px; height: 30px; display: grid; place-items: center; border: 2px solid white; border-radius: 10px; box-shadow: 0 3px 9px rgba(0,0,0,.25); background: #206da8; font-size: 16px; }
+    .user-dot { width: 22px; height: 22px; border-radius: 50%; background: #1877f2; border: 4px solid white; box-shadow: 0 0 0 8px rgba(24,119,242,.2), 0 3px 10px rgba(0,0,0,.25); }
 
-    @media (max-width: 390px) {
-      .reaction-row { gap: 5px; }
-      .reaction-button { font-size: .61rem; }
-      .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (min-width: 780px) {
+      .topbar { left: 20px; right: auto; width: min(560px, calc(100% - 40px)); }
+      .bottom-nav { left: 50%; right: auto; width: 520px; transform: translateX(-50%); }
+      .sheet { left: auto; right: 18px; bottom: 96px; width: 430px; max-height: calc(100vh - 130px); border-radius: 24px; }
+      .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { margin-bottom: 10px !important; }
     }
   </style>
 </head>
 <body>
-  <div class="app-shell">
+  <div id="app">
+    <div id="map" aria-label="Interactive map"></div>
+
     <header class="topbar">
-      <div class="brand-wrap">
-        <h1 class="brand">WatchPick</h1>
-        <div class="brand-sub" id="headerSub">Your next movie or show</div>
-      </div>
-      <button class="icon-button" id="openSettings" aria-label="Open settings">⚙️</button>
+      <button class="brand" id="menuBtn" aria-label="Open app menu">MM<small>SEATTLE</small></button>
+      <form class="search-wrap" id="searchForm">
+        <input id="searchInput" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search Seattle places…" aria-label="Search for a place" />
+        <button class="icon-btn" type="button" id="searchMicBtn" aria-label="Search by voice">🎤</button>
+        <button class="icon-btn" type="submit" aria-label="Search">⌕</button>
+      </form>
     </header>
 
-    <main>
-      <section class="screen active" id="pickScreen">
-        <div class="hero">
-          <p class="eyebrow">Personal picks</p>
-          <h2>What sounds good?</h2>
-          <p>Choose a feeling, then get a few uncluttered suggestions based on what you like.</p>
+    <div class="jump-strip" id="jumpStrip" aria-label="Jump to a Seattle neighborhood">
+      <button class="jump-chip" data-jump="uw">🎓 UW</button>
+      <button class="jump-chip" data-jump="udistrict">U District</button>
+      <button class="jump-chip" data-jump="wallingford">🏫 Wallingford</button>
+    </div>
+
+    <div class="map-tip" id="mapTip">Tap the map where you want the pin.</div>
+
+    <nav class="bottom-nav" aria-label="Main controls">
+      <button class="nav-btn" id="pinsBtn"><span>📍</span><span>Places</span></button>
+      <button class="nav-btn" id="scheduleBtn"><span>📅</span><span>Schedule</span></button>
+      <button class="nav-btn add" id="addBtn" aria-label="Add a place"><span>＋</span><span>Add</span></button>
+      <button class="nav-btn" id="planBtn"><span>🧭</span><span>Plan</span></button>
+      <button class="nav-btn" id="moreBtn"><span>☰</span><span>More</span></button>
+    </nav>
+
+    <div class="sheet-backdrop" id="backdrop"></div>
+    <section class="sheet" id="sheet" aria-live="polite"></section>
+    <button id="findPartnerBtn" aria-label="Follow her location" title="Follow her location" style="display:none;"><span id="findPartnerBtnIcon">📍</span></button>
+    <button id="followMeBtn" aria-label="Follow my location" title="Follow my location" style="display:none;"><span class="follow-me-icon"><span class="follow-me-ring"></span><span class="follow-me-dot"></span></span></button>
+    <div class="toast" id="toast"></div>
+    <input type="file" id="importInput" accept="application/json,.json" hidden />
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@5.7.1/dist/maplibre-gl.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/maplibre-gl@5.7.1/dist/maplibre-gl.js'"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const mymapSupabase = supabase.createClient(
+      "https://xnwwngqennvwajlhvclj.supabase.co",
+      "sb_publishable_jTMgKMLZhXwLPBJyzMueqA_qf5QXVZ8"
+    );
+  (() => {
+    "use strict";
+
+    const APP_VERSION = 12;
+    const STORAGE_KEY = "huskySteps.places.v1";
+    const SETTINGS_KEY = "huskySteps.settings.v1";
+    const SCHEDULE_KEY = "mymap.schedule.v1";
+    const SEARCH_CACHE_KEY = "mymap.searchCache.v2";
+    const SHARE_KEY = "mymap.share.v1";
+    const SHARING_ON_KEY = "mymap.sharingOn.v1";
+    const DEVICE_ID_KEY = "mymap.deviceId.v1";
+    const UW = { lat: 47.6553, lng: -122.3035 };
+    const LINCOLN_HS = { lat: 47.6600, lng: -122.3397, address: "4400 Interlake Ave N, Seattle, WA 98103" };
+    const NEIGHBORHOODS = {
+      uw: { label: "UW", bounds: [[-122.3220, 47.6425], [-122.2865, 47.6698]] },
+      udistrict: { label: "University District", bounds: [[-122.3300, 47.6480], [-122.2985, 47.6755]] },
+      wallingford: { label: "Wallingford (Lincoln HS)", bounds: [[-122.3520, 47.6480], [-122.3230, 47.6660]] },
+      capitolhill: { label: "Capitol Hill", bounds: [[-122.3375, 47.6065], [-122.2985, 47.6420]] },
+      downtown: { label: "Downtown", bounds: [[-122.3560, 47.5895], [-122.3180, 47.6215]] },
+      fremont: { label: "Fremont", bounds: [[-122.3700, 47.6375], [-122.3315, 47.6660]] },
+      ballard: { label: "Ballard", bounds: [[-122.4150, 47.6520], [-122.3635, 47.6930]] },
+      greenlake: { label: "Green Lake", bounds: [[-122.3510, 47.6630], [-122.3040, 47.6990]] },
+      queenanne: { label: "Queen Anne", bounds: [[-122.3830, 47.6180], [-122.3330, 47.6585]] }
+    };
+    const UW_TRANSIT_FALLBACK = [
+      { name: "U District Station", lat: 47.6601, lng: -122.3132, rail: true },
+      { name: "University of Washington Station", lat: 47.6500, lng: -122.3038, rail: true }
+    ];
+    const SEATTLE_VIEWBOX = "-122.4597,47.7341,-122.2244,47.4919";
+
+    const CATEGORIES = {
+      home:    { label: "Home", emoji: "🏠" },
+      school:  { label: "School / Campus building", emoji: "🎓" },
+      work:    { label: "Work", emoji: "💼" },
+      grocery: { label: "Groceries", emoji: "🛒" },
+      food:    { label: "Food & coffee", emoji: "☕" },
+      transit: { label: "Transit", emoji: "🚉" },
+      study:   { label: "Study", emoji: "📚" },
+      health:  { label: "Health", emoji: "💊" },
+      fun:     { label: "Parks & fun", emoji: "🌳" },
+      other:   { label: "Other", emoji: "📌" }
+    };
+
+    let places = loadJSON(STORAGE_KEY, []).map(place => place && place.category === "uw" ? { ...place, category: "school" } : place);
+    let settings = loadJSON(SETTINGS_KEY, { transitVisible: false, welcomed: false });
+    let schedule = loadJSON(SCHEDULE_KEY, []);
+    let markers = new Map();
+    let searchResultMarkers = [];
+    let lastSearchResults = [];
+    let activeFilter = "all";
+    let shareSession = loadJSON(SHARE_KEY, null); // { code, role: "creator"|"partner" }
+    let sharingOn = loadJSON(SHARING_ON_KEY, false);
+    let shareChannel = null;
+    let shareWatchId = null;
+    let sharePollTimer = null;
+    let partnerMarker = null;
+    let partnerLat = null;
+    let partnerLng = null;
+    let followPartner = true;
+    let followMe = true;
+    let liveWatchId = null;
+    let lastBroadcastAt = 0;
+
+    let myDeviceId = localStorage.getItem(DEVICE_ID_KEY);
+    if (!myDeviceId) {
+      myDeviceId = uid();
+      localStorage.setItem(DEVICE_ID_KEY, myDeviceId);
+    }
+    let pendingLatLng = null;
+    let editingId = null;
+    let placementMode = false;
+    let transitMarkers = [];
+    let userMarker = null;
+    let userLocation = null;
+    let toastTimer = null;
+    let tipTimer = null;
+    let lastSearchAt = 0;
+    let selectedSearchResult = null;
+
+    if (!window.maplibregl) {
+      document.getElementById("map").innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:30px;text-align:center;background:#f6f3fb;color:#4b2e83;font-weight:800">The map library could not load. Check the internet connection and reopen MyMap.</div>';
+      return;
+    }
+
+    const map = new maplibregl.Map({
+      container: "map",
+      center: [UW.lng, UW.lat],
+      zoom: 14,
+      attributionControl: false,
+      style: {
+        version: 8,
+        glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
+        sources: {
+          cleanmap: {
+            type: "raster",
+            tiles: [
+              "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+              "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+              "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+              "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
+            ],
+            tileSize: 256,
+            maxzoom: 20,
+            attribution: "© OpenStreetMap contributors © CARTO"
+          }
+        },
+        layers: [{ id: "cleanmap", type: "raster", source: "cleanmap" }]
+      }
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-left");
+
+    function setMapView(lat, lng, zoom, animate = false) {
+      // Any explicit "go look at this place" call (a neighborhood chip, UW
+      // button, a saved place, etc.) means the map should go wherever it's
+      // told and stop fighting to snap back to a follow target.
+      if (followMe || followPartner) {
+        followMe = false;
+        followPartner = false;
+        updateFollowMeButtonVisibility();
+        updateFindPartnerButtonVisibility();
+      }
+      const options = { center: [lng, lat], zoom };
+      animate ? map.easeTo(options) : map.jumpTo(options);
+    }
+
+    function showNeighborhood(neighborhood, animate = true) {
+      if (!neighborhood || !neighborhood.bounds) return;
+      if (followMe || followPartner) {
+        followMe = false;
+        followPartner = false;
+        updateFollowMeButtonVisibility();
+        updateFindPartnerButtonVisibility();
+      }
+      map.fitBounds(neighborhood.bounds, {
+        padding: { top: 150, right: 24, bottom: 100, left: 24 },
+        maxZoom: 15,
+        duration: animate ? 850 : 0
+      });
+    }
+
+    const UW_BUILDING_FALLBACK = [
+      ["Kane Hall", -122.3097, 47.6567],
+      ["Mary Gates Hall", -122.3078, 47.6548],
+      ["Suzzallo Library", -122.3081, 47.6559],
+      ["Odegaard Library", -122.3105, 47.6564],
+      ["Husky Union Building", -122.3051, 47.6554],
+      ["IMA", -122.3010, 47.6533],
+      ["Health Sciences", -122.3100, 47.6497],
+      ["Paul G. Allen Center", -122.3056, 47.6532],
+      ["Meany Hall", -122.3102, 47.6550],
+      ["Burke Museum", -122.3112, 47.6604]
+    ];
+
+    function buildingFeatures(items) {
+      return items.map(([name, lng, lat]) => ({
+        type: "Feature",
+        properties: { name },
+        geometry: { type: "Point", coordinates: [lng, lat] }
+      }));
+    }
+
+    async function loadUwBuildingLabels() {
+      let features = buildingFeatures(UW_BUILDING_FALLBACK);
+      const query = `[out:json][timeout:18];(way["building"]["name"](47.642,-122.322,47.670,-122.286);relation["building"]["name"](47.642,-122.322,47.670,-122.286);node["building"]["name"](47.642,-122.322,47.670,-122.286););out center;`;
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.nchc.org.tw/api/interpreter"
+      ];
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: "data=" + encodeURIComponent(query)
+          });
+          if (!response.ok) throw new Error("Building label request failed");
+          const data = await response.json();
+          const found = (data.elements || []).map(el => {
+            const lat = el.lat ?? el.center?.lat;
+            const lng = el.lon ?? el.center?.lon;
+            const name = el.tags?.name;
+            return name && Number.isFinite(lat) && Number.isFinite(lng) ? [name, lng, lat] : null;
+          }).filter(Boolean);
+          if (found.length) features = buildingFeatures(found);
+          break;
+        } catch (_) {}
+      }
+
+      const data = { type: "FeatureCollection", features };
+      if (map.getSource("uw-buildings")) {
+        map.getSource("uw-buildings").setData(data);
+        return;
+      }
+      map.addSource("uw-buildings", { type: "geojson", data });
+      map.addLayer({
+        id: "uw-building-labels",
+        type: "symbol",
+        source: "uw-buildings",
+        minzoom: 14,
+        layout: {
+          "text-field": ["get", "name"],
+          "text-font": ["Open Sans Semibold"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10, 16, 13, 18, 15],
+          "text-max-width": 10,
+          "text-allow-overlap": false,
+          "text-padding": 3
+        },
+        paint: {
+          "text-color": "#2b2140",
+          "text-halo-color": "rgba(255,255,255,0.96)",
+          "text-halo-width": 1.8
+        }
+      });
+    }
+
+    function refreshMapSize() {
+      requestAnimationFrame(() => map.resize());
+    }
+    window.addEventListener("load", () => {
+      refreshMapSize();
+      setTimeout(refreshMapSize, 150);
+      setTimeout(refreshMapSize, 600);
+    });
+    window.addEventListener("resize", refreshMapSize);
+    window.addEventListener("orientationchange", () => setTimeout(refreshMapSize, 250));
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", refreshMapSize);
+
+    map.on("load", () => {
+      renderMarkers();
+      loadUwBuildingLabels();
+      if (settings.transitVisible) loadTransitStops();
+    });
+
+    const sheet = document.getElementById("sheet");
+    const backdrop = document.getElementById("backdrop");
+    const toastEl = document.getElementById("toast");
+    const mapTip = document.getElementById("mapTip");
+
+    function loadJSON(key, fallback) {
+      try {
+        const value = JSON.parse(localStorage.getItem(key));
+        return value ?? fallback;
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    function savePlaces() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(places));
+    }
+
+    function saveSettings() {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+
+    function saveSchedule() {
+      localStorage.setItem(SCHEDULE_KEY, JSON.stringify(schedule));
+    }
+
+    function uid() {
+      return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2));
+    }
+
+    function esc(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function toast(message) {
+      clearTimeout(toastTimer);
+      toastEl.textContent = message;
+      toastEl.classList.add("show");
+      toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2600);
+    }
+
+    function showTip(message, duration = 2500) {
+      clearTimeout(tipTimer);
+      mapTip.textContent = message;
+      mapTip.classList.add("show");
+      if (duration) tipTimer = setTimeout(() => mapTip.classList.remove("show"), duration);
+    }
+
+    let lastMainBackPress = 0;
+    let allowBrowserExit = false;
+
+    // Keep one protected main-map history entry. This lets Android's Back
+    // button close MyMap panels before it can leave the installed app.
+    try {
+      history.replaceState({ mymapRoot: true }, "", location.href);
+      history.pushState({ mymapHome: true }, "", location.href);
+    } catch (_) {}
+
+    function openSheet(html) {
+      const wasOpen = sheet.classList.contains("show");
+      sheet.innerHTML = '<div class="handle"></div>' + html;
+      sheet.classList.add("show");
+      backdrop.classList.add("show");
+
+      // Only add one browser-history step for the visible panel. Moving from
+      // one panel to another replaces its contents without stacking dozens of
+      // Back presses.
+      if (!wasOpen) {
+        try { history.pushState({ mymapOverlay: true }, "", location.href); } catch (_) {}
+      }
+    }
+
+    function closeSheet(fromPhoneBack = false) {
+      const wasOpen = sheet.classList.contains("show");
+      sheet.classList.remove("show");
+      backdrop.classList.remove("show");
+      editingId = null;
+      selectedSearchResult = null;
+
+      // A visible X/backdrop close should immediately make the current
+      // history entry behave like the main map. A phone Back event has already
+      // moved history, so it must not change history again.
+      if (wasOpen && !fromPhoneBack) {
+        try { history.replaceState({ mymapHome: true }, "", location.href); } catch (_) {}
+      }
+    }
+
+    window.addEventListener("popstate", () => {
+      if (allowBrowserExit) return;
+
+      if (sheet.classList.contains("show")) {
+        closeSheet(true);
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastMainBackPress < 1800) {
+        allowBrowserExit = true;
+        setTimeout(() => {
+          try { history.back(); } catch (_) {}
+        }, 0);
+        return;
+      }
+
+      lastMainBackPress = now;
+      toast("Press Back again to exit MyMap.");
+      try { history.pushState({ mymapHome: true }, "", location.href); } catch (_) {}
+    });
+
+    function categoryOptions(selected = "other") {
+      return Object.entries(CATEGORIES).map(([key, item]) =>
+        `<option value="${key}" ${key === selected ? "selected" : ""}>${item.emoji} ${esc(item.label)}</option>`
+      ).join("");
+    }
+
+    function markerElement(place, extraClass = "") {
+      const cat = CATEGORIES[place.category] || CATEGORIES.other;
+      const stateClass = place.favorite ? "favorite" : (place.visited ? "visited" : "");
+      const el = document.createElement("div");
+      el.className = `map-pin ${extraClass}`.trim();
+      el.innerHTML = `<div class="pin-bubble ${stateClass}"><span>${cat.emoji}</span></div>`;
+      el.title = place.title || cat.label;
+      return el;
+    }
+
+    function renderMarkers() {
+      for (const marker of markers.values()) marker.remove();
+      markers.clear();
+      if (!map.loaded()) return;
+
+      places.forEach(place => {
+        if (activeFilter !== "all" && place.category !== activeFilter) return;
+        const popup = new maplibregl.Popup({ offset: 28, closeButton: false })
+          .setHTML(`<div class="popup-title">${(CATEGORIES[place.category] || CATEGORIES.other).emoji} ${esc(place.title)}</div><div class="popup-meta">Tap the pin for notes and directions.</div>`);
+        const marker = new maplibregl.Marker({ element: markerElement(place), anchor: "bottom" })
+          .setLngLat([place.lng, place.lat])
+          .setPopup(popup)
+          .addTo(map);
+        marker.getElement().addEventListener("click", () => showPlace(place.id));
+        markers.set(place.id, marker);
+      });
+    }
+
+    function haversine(a, b) {
+      const R = 6371000;
+      const rad = d => d * Math.PI / 180;
+      const dLat = rad(b.lat - a.lat);
+      const dLng = rad(b.lng - a.lng);
+      const q = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
+    }
+
+    function distanceLabel(meters) {
+      if (!Number.isFinite(meters)) return "Location needed";
+      if (meters < 1000) return `${Math.round(meters / 10) * 10} m`;
+      return `${(meters / 1609.344).toFixed(meters > 8046 ? 1 : 2)} mi`;
+    }
+
+    function walkEstimate(meters) {
+      if (!Number.isFinite(meters)) return "Location needed";
+      const minutes = Math.max(1, Math.round(meters / 80));
+      return `about ${minutes} min`;
+    }
+
+    function currentOrigin() {
+      return userLocation || null;
+    }
+
+    function showPlace(id) {
+      const place = places.find(p => p.id === id);
+      if (!place) return;
+      const cat = CATEGORIES[place.category] || CATEGORIES.other;
+      const origin = userLocation;
+      const distance = origin ? haversine(origin, place) : NaN;
+      const address = place.address ? `<p>${esc(place.address)}</p>` : "";
+      const note = place.notes ? `<div class="place-note">${esc(place.notes)}</div>` : '<div class="place-note" style="color:var(--muted)">No notes yet.</div>';
+      openSheet(`
+        <div class="sheet-head"><div style="flex:1"></div><button class="close-btn" data-action="close" aria-label="Close">×</button></div>
+        <div class="place-title">
+          <div class="big-emoji">${cat.emoji}</div>
+          <div><h2>${esc(place.title)}</h2><p>${esc(cat.label)}${place.favorite ? " · Favorite" : ""}${place.visited ? " · Visited" : ""}</p>${address}</div>
         </div>
-
-        <div id="connectionNotice"></div>
-
-        <div class="panel flat">
-          <div class="section-head"><h3>Pick from</h3></div>
-          <div class="segmented" id="mediaChoice">
-            <button class="active" data-media="all">Both</button>
-            <button data-media="movie">Movies</button>
-            <button data-media="tv">TV shows</button>
-          </div>
-
-          <div class="section-head" style="margin-top:17px"><h3>My mood</h3></div>
-          <div class="chip-row" id="moodChoice">
-            <button class="chip active" data-mood="any">Surprise me</button>
-            <button class="chip" data-mood="funny">Funny</button>
-            <button class="chip" data-mood="suspenseful">Suspenseful</button>
-            <button class="chip" data-mood="light">Light</button>
-            <button class="chip" data-mood="serious">Serious</button>
-            <button class="chip" data-mood="action">Action</button>
-            <button class="chip" data-mood="comfort">Comforting</button>
-            <button class="chip" data-mood="true">True stories</button>
-            <button class="chip" data-mood="scary">Scary</button>
-          </div>
-
-          <div style="margin-top:16px">
-            <button class="primary-button wide" id="makePicks">Pick something for me</button>
-          </div>
-          <div class="suggestion-note" id="learningNote">Mark things you love, like, or have watched. Your picks will improve automatically.</div>
+        <div class="stats">
+          <div class="stat"><strong>${distanceLabel(distance)}</strong><small>straight-line distance</small></div>
+          <div class="stat"><strong>${walkEstimate(distance)}</strong><small>rough walking estimate</small></div>
         </div>
-
-        <div id="pickResults"></div>
-      </section>
-
-      <section class="screen" id="searchScreen">
-        <div class="hero">
-          <p class="eyebrow">Search everything</p>
-          <h2>Titles or actors</h2>
-          <p>Search a movie, a TV show, or an actor’s name in the same box.</p>
+        ${note}
+        <div class="actions">
+          <button class="btn success" data-action="directions" data-mode="walking" data-id="${place.id}">🚶 Walk now</button>
+          <button class="btn primary" data-action="plan-to-place" data-id="${place.id}">🚌 Transit plan</button>
+          <button class="btn gold" data-action="share" data-id="${place.id}">↗ Share place</button>
+          <button class="btn" data-action="edit" data-id="${place.id}">✏️ Edit pin</button>
         </div>
-        <div class="panel flat">
-          <form class="search-wrap" id="searchForm">
-            <span class="search-symbol">⌕</span>
-            <input class="search-field" id="searchInput" type="search" autocomplete="off" placeholder="Try Sandra Bullock or a title" />
-            <button class="primary-button search-go" type="submit">Search</button>
+      `);
+    }
+
+    function startAdd(latlng = null, preset = null) {
+      if (!latlng) {
+        placementMode = true;
+        pendingLatLng = null;
+        closeSheet();
+        showTip("Tap the map where you want the pin.", 0);
+        document.getElementById("addBtn").classList.add("active");
+        return;
+      }
+      placementMode = false;
+      document.getElementById("addBtn").classList.remove("active");
+      mapTip.classList.remove("show");
+      pendingLatLng = { lat: latlng.lat, lng: latlng.lng };
+      editingId = null;
+      showEditForm({
+        title: preset?.title || "",
+        category: preset?.category || "other",
+        address: preset?.address || "",
+        notes: "",
+        favorite: false,
+        visited: false
+      });
+    }
+
+    function showEditForm(place) {
+      const isEditing = Boolean(editingId);
+      openSheet(`
+        <div class="sheet-head"><h2>${isEditing ? "Edit pin" : "Add a place"}</h2><button class="close-btn" data-action="close" aria-label="Close">×</button></div>
+        <form id="placeForm">
+          <div class="field"><label for="placeTitle">Place name</label><input id="placeTitle" name="title" maxlength="80" required value="${esc(place.title)}" placeholder="Coffee shop, apartment, classroom…" /></div>
+          <div class="field"><label for="placeCategory">Category</label><select id="placeCategory" name="category">${categoryOptions(place.category)}</select></div>
+          <div class="field"><label for="placeAddress">Address or location details</label><input id="placeAddress" name="address" maxlength="180" value="${esc(place.address)}" placeholder="Optional" /></div>
+          <div class="field"><label for="placeNotes">Personal notes</label><textarea id="placeNotes" name="notes" maxlength="1500" placeholder="Best time to go, what to order, which bus stop to use…">${esc(place.notes)}</textarea></div>
+          <div class="switch-row">
+            <label class="switch-card"><input type="checkbox" name="favorite" ${place.favorite ? "checked" : ""}/> ❤️ Favorite</label>
+            <label class="switch-card"><input type="checkbox" name="visited" ${place.visited ? "checked" : ""}/> ✓ Visited</label>
+          </div>
+          <div class="actions ${isEditing ? "" : "one"}">
+            ${isEditing ? `<button type="button" class="btn danger" data-action="delete" data-id="${editingId}">Delete</button>` : ""}
+            <button type="submit" class="btn primary">Save pin</button>
+          </div>
+        </form>
+      `);
+      setTimeout(() => document.getElementById("placeTitle")?.focus(), 80);
+    }
+
+    function saveForm(form) {
+      const data = new FormData(form);
+      const title = String(data.get("title") || "").trim();
+      if (!title) return toast("Please add a place name.");
+      const fields = {
+        title,
+        category: CATEGORIES[data.get("category")] ? data.get("category") : "other",
+        address: String(data.get("address") || "").trim(),
+        notes: String(data.get("notes") || "").trim(),
+        favorite: data.get("favorite") === "on",
+        visited: data.get("visited") === "on",
+        updatedAt: new Date().toISOString()
+      };
+
+      const wasEditing = Boolean(editingId);
+      if (editingId) {
+        const index = places.findIndex(p => p.id === editingId);
+        if (index >= 0) places[index] = { ...places[index], ...fields };
+      } else {
+        if (!pendingLatLng) return toast("Choose a point on the map first.");
+        places.push({
+          id: uid(),
+          lat: pendingLatLng.lat,
+          lng: pendingLatLng.lng,
+          createdAt: new Date().toISOString(),
+          ...fields
+        });
+      }
+      savePlaces();
+      renderMarkers();
+      closeSheet();
+      pendingLatLng = null;
+      toast(wasEditing ? "Pin updated." : "Pin saved.");
+    }
+
+    function deletePlace(id) {
+      const place = places.find(p => p.id === id);
+      if (!place) return;
+      if (!confirm(`Delete “${place.title}”?`)) return;
+      places = places.filter(p => p.id !== id);
+      savePlaces();
+      renderMarkers();
+      closeSheet();
+      toast("Pin deleted.");
+    }
+
+    function showPins() {
+      const chips = [`<button class="chip ${activeFilter === "all" ? "active" : ""}" data-action="filter" data-filter="all">All</button>`]
+        .concat(Object.entries(CATEGORIES).map(([key, cat]) => `<button class="chip ${activeFilter === key ? "active" : ""}" data-action="filter" data-filter="${key}">${cat.emoji} ${esc(cat.label)}</button>`)).join("");
+      const origin = userLocation;
+      const filtered = places
+        .filter(p => activeFilter === "all" || p.category === activeFilter)
+        .map(p => ({ ...p, _distance: origin ? haversine(origin, p) : null }))
+        .sort((a, b) => origin ? a._distance - b._distance : a.title.localeCompare(b.title));
+
+      const list = filtered.length ? filtered.map(p => {
+        const cat = CATEGORIES[p.category] || CATEGORIES.other;
+        const meta = [cat.label, p.favorite ? "Favorite" : "", p.visited ? "Visited" : ""].filter(Boolean).join(" · ");
+        return `<button class="pin-card" data-action="open-place" data-id="${p.id}">
+          <span class="emoji">${cat.emoji}</span>
+          <span><h3>${esc(p.title)}</h3><p>${esc(meta)}${p.notes ? `<br>${esc(p.notes.slice(0, 70))}${p.notes.length > 70 ? "…" : ""}` : ""}</p></span>
+          <span class="distance">${origin ? distanceLabel(p._distance) : "›"}</span>
+        </button>`;
+      }).join("") : `<div class="empty"><span class="big">📍</span>No saved places in this category.</div>`;
+
+      openSheet(`
+        <div class="sheet-head"><h2>My places</h2><button class="close-btn" data-action="close" aria-label="Close">×</button></div>
+        <div class="category-strip">${chips}</div>
+        <div class="pin-list">${list}</div>
+      `);
+    }
+
+    function updateAccuracyCircle(lat, lng, radiusMeters) {
+      if (!map.loaded()) return;
+      const steps = 48;
+      const coords = [];
+      const earth = 6378137;
+      for (let i = 0; i <= steps; i++) {
+        const angle = (i / steps) * Math.PI * 2;
+        const dLat = (radiusMeters / earth) * Math.sin(angle);
+        const dLng = (radiusMeters / (earth * Math.cos(lat * Math.PI / 180))) * Math.cos(angle);
+        coords.push([lng + dLng * 180 / Math.PI, lat + dLat * 180 / Math.PI]);
+      }
+      const data = { type: "Feature", geometry: { type: "Polygon", coordinates: [coords] } };
+      if (map.getSource("user-accuracy")) {
+        map.getSource("user-accuracy").setData(data);
+      } else {
+        map.addSource("user-accuracy", { type: "geojson", data });
+        map.addLayer({ id: "user-accuracy-fill", type: "fill", source: "user-accuracy", paint: { "fill-color": "#1877f2", "fill-opacity": 0.08 } });
+        map.addLayer({ id: "user-accuracy-line", type: "line", source: "user-accuracy", paint: { "line-color": "#1877f2", "line-width": 1 } });
+      }
+    }
+
+    async function locateUser(center = true) {
+      if (!navigator.geolocation) return toast("Location is not supported on this device.");
+      toast("Finding your location…");
+      navigator.geolocation.getCurrentPosition(position => {
+        const { latitude, longitude, accuracy } = position.coords;
+        userLocation = { lat: latitude, lng: longitude };
+        if (userMarker) userMarker.remove();
+        const userEl = document.createElement("div");
+        userEl.innerHTML = '<div class="user-dot"></div>';
+        userEl.title = "Your location";
+        userMarker = new maplibregl.Marker({ element: userEl, anchor: "center" })
+          .setLngLat([longitude, latitude])
+          .addTo(map);
+        updateAccuracyCircle(latitude, longitude, accuracy);
+        if (center) setMapView(latitude, longitude, Math.max(map.getZoom(), 16));
+        toast(`Location found${accuracy ? ` · about ${Math.round(accuracy)} m accuracy` : ""}.`);
+        startLiveLocation();
+      }, error => {
+        const message = error.code === 1 ? "Location permission was denied." : "Could not find your location.";
+        toast(message);
+      }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 });
+    }
+
+    function startLiveLocation() {
+      if (liveWatchId !== null || !navigator.geolocation) return;
+
+      liveWatchId = navigator.geolocation.watchPosition(position => {
+        const { latitude, longitude, accuracy } = position.coords;
+        userLocation = { lat: latitude, lng: longitude };
+
+        if (userMarker) {
+          userMarker.setLngLat([longitude, latitude]);
+        } else {
+          const userEl = document.createElement("div");
+          userEl.innerHTML = '<div class="user-dot"></div>';
+          userEl.title = "Your location";
+          userMarker = new maplibregl.Marker({ element: userEl, anchor: "center" }).setLngLat([longitude, latitude]).addTo(map);
+        }
+
+        updateAccuracyCircle(latitude, longitude, accuracy);
+        updateFollowMeButtonVisibility();
+
+        if (followMe) {
+          map.easeTo({ center: [longitude, latitude], duration: 900 });
+        }
+      }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
+    }
+
+    function tapFollowMeBtn() {
+      if (!userLocation) { locateUser(true); return; }
+      followMe = true;
+      followPartner = false;
+      updateFollowMeButtonVisibility();
+      updateFindPartnerButtonVisibility();
+      map.easeTo({ center: [userLocation.lng, userLocation.lat], zoom: Math.max(map.getZoom(), 16) });
+    }
+
+    function updateFollowMeButtonVisibility() {
+      const btn = document.getElementById("followMeBtn");
+      if (!btn) return;
+      btn.style.display = userLocation ? "flex" : "none";
+      btn.classList.toggle("following", followMe);
+    }
+
+    document.getElementById("followMeBtn").addEventListener("click", tapFollowMeBtn);
+    startLiveLocation();
+
+    function goHome() {
+      const home = places.find(p => p.category === "home");
+      if (!home) {
+        toast("Add an apartment or home pin first.");
+        activeFilter = "home";
+        showPins();
+        return;
+      }
+      setMapView(home.lat, home.lng, 17);
+      const marker = markers.get(home.id);
+      marker?.togglePopup();
+      showPlace(home.id);
+    }
+
+    function openDirections(place, mode) {
+      const destination = `${place.lat},${place.lng}`;
+      const origin = userLocation ? `&origin=${userLocation.lat},${userLocation.lng}` : "";
+      const url = `https://www.google.com/maps/dir/?api=1${origin}&destination=${encodeURIComponent(destination)}&travelmode=${mode}&dir_action=navigate`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+
+    async function sharePlace(place) {
+      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`;
+      const text = `${place.title}${place.address ? `\n${place.address}` : ""}${place.notes ? `\n${place.notes}` : ""}`;
+      try {
+        if (navigator.share) await navigator.share({ title: place.title, text, url: mapsUrl });
+        else {
+          await navigator.clipboard.writeText(`${text}\n${mapsUrl}`);
+          toast("Place copied to the clipboard.");
+        }
+      } catch (error) {
+        if (error?.name !== "AbortError") toast("Could not share this place.");
+      }
+    }
+
+    function visibleSearchBounds() {
+      const b = map.getBounds();
+      return {
+        south: Math.max(47.45, b.getSouth()),
+        west: Math.max(-122.50, b.getWest()),
+        north: Math.min(47.78, b.getNorth()),
+        east: Math.min(-122.15, b.getEast())
+      };
+    }
+
+    function overpassSearchTerms(query) {
+      const q = query.toLowerCase().trim();
+      if (/^coffee$|coffee shop|cafe|café/.test(q)) return ['["amenity"="cafe"]','["shop"="coffee"]'];
+      if (/restaurant|food|lunch|dinner/.test(q)) return ['["amenity"="restaurant"]','["amenity"="fast_food"]','["amenity"="cafe"]'];
+      if (/grocery|groceries|supermarket/.test(q)) return ['["shop"="supermarket"]','["shop"="convenience"]'];
+      const safe = q.replace(/[\\"\n\r]/g, "").slice(0, 50);
+      return [`["name"~"${safe}",i]`,`["brand"~"${safe}",i]`,`["operator"~"${safe}",i]`];
+    }
+
+    async function searchNearbyBusinesses(query) {
+      const b = visibleSearchBounds();
+      const bbox = `${b.south},${b.west},${b.north},${b.east}`;
+      const selectors = overpassSearchTerms(query);
+      const parts = [];
+      for (const selector of selectors) {
+        parts.push(`node${selector}(${bbox});way${selector}(${bbox});relation${selector}(${bbox});`);
+      }
+      const overpassQuery = `[out:json][timeout:10];(${parts.join("")});out center tags 100;`;
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.nchc.org.tw/api/interpreter"
+      ];
+      for (const endpoint of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: "data=" + encodeURIComponent(overpassQuery),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!response.ok) throw new Error("Nearby search unavailable");
+          const data = await response.json();
+          const center = map.getCenter();
+          return (data.elements || []).map(el => {
+            const lat = el.lat ?? el.center?.lat;
+            const lon = el.lon ?? el.center?.lon;
+            const tags = el.tags || {};
+            const name = tags.name || tags.brand || tags.operator;
+            if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+            const detail = [tags["addr:housenumber"], tags["addr:street"], tags["addr:city"] || "Seattle"].filter(Boolean).join(" ");
+            const distance = Math.hypot(lat - center.lat, (lon - center.lng) * 0.7);
+            return { name, display_name: detail || `${name}, Seattle, Washington`, lat: String(lat), lon: String(lon), category: tags.amenity || tags.shop || "place", type: tags.amenity || tags.shop || "place", _distance: distance };
+          }).filter(Boolean).sort((a,b)=>a._distance-b._distance).slice(0,60);
+        } catch (_) {}
+      }
+      return [];
+    }
+
+    async function searchPlaces(query) {
+      const q = query.trim();
+      if (q.length < 2) return toast("Type at least two letters.");
+      const now = Date.now();
+      if (now - lastSearchAt < 900) return toast("Please wait a moment before searching again.");
+      lastSearchAt = now;
+      closeSheet();
+      toast("Searching…");
+
+      const bounds = visibleSearchBounds();
+      const cache = loadJSON(SEARCH_CACHE_KEY, {});
+      const cacheKey = `${q.toLowerCase()}|${bounds.south.toFixed(2)},${bounds.west.toFixed(2)},${bounds.north.toFixed(2)},${bounds.east.toFixed(2)}`;
+      let results = cache[cacheKey]?.results;
+      const fresh = cache[cacheKey] && now - cache[cacheKey].savedAt < 24 * 60 * 60 * 1000;
+
+      try {
+        if (!fresh) {
+          const params = new URLSearchParams({
+            format: "jsonv2",
+            q: `${q}, Seattle, Washington`,
+            limit: "15",
+            addressdetails: "1",
+            bounded: "1",
+            viewbox: `${bounds.west},${bounds.north},${bounds.east},${bounds.south}`
+          });
+          const [geoResponse, nearby] = await Promise.all([
+            fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, { headers: { "Accept": "application/json" } }).then(r => r.ok ? r.json() : []),
+            searchNearbyBusinesses(q)
+          ]);
+          const combined = [...nearby, ...(geoResponse || [])];
+          const seen = new Set();
+          const origin = userLocation || map.getCenter();
+          results = combined.filter(r => {
+            const key = `${String(r.name || r.display_name).toLowerCase()}|${Number(r.lat).toFixed(4)}|${Number(r.lon).toFixed(4)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }).map(r => ({ ...r, _distance: Math.hypot(Number(r.lat) - origin.lat, (Number(r.lon) - origin.lng) * 0.7) }))
+            .sort((a, b) => a._distance - b._distance)
+            .slice(0, 30);
+          cache[cacheKey] = { savedAt: now, results };
+          const limitedCache = Object.fromEntries(Object.entries(cache).slice(-40));
+          localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(limitedCache));
+        }
+        renderSearchResultPins(results || []);
+      } catch (_) {
+        clearSearchResultMarkers();
+        toast("Search could not load. Check the internet connection, or use Add and tap the map.");
+      }
+    }
+
+    function guessCategory(result) {
+      const type = `${result.type || ""} ${result.category || ""} ${result.display_name || ""}`.toLowerCase();
+      if (/university|college|school|campus/.test(type)) return "school";
+      if (/supermarket|grocery|market/.test(type)) return "grocery";
+      if (/cafe|coffee|restaurant|fast_food|food/.test(type)) return "food";
+      if (/station|bus_stop|platform|transit/.test(type)) return "transit";
+      if (/library|study/.test(type)) return "study";
+      if (/hospital|clinic|pharmacy|doctor/.test(type)) return "health";
+      if (/park|museum|theatre|cinema|attraction/.test(type)) return "fun";
+      return "other";
+    }
+
+    function clearSearchResultMarkers() {
+      searchResultMarkers.forEach(marker => marker.remove());
+      searchResultMarkers = [];
+    }
+
+    function renderSearchResultPins(results) {
+      clearSearchResultMarkers();
+      lastSearchResults = results;
+
+      if (!results.length) {
+        toast("No places were found in the map area. Zoom or move the map, then search again.");
+        return;
+      }
+
+      const coords = [];
+
+      results.forEach((r, index) => {
+        const lat = Number(r.lat);
+        const lng = Number(r.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        coords.push([lng, lat]);
+
+        const title = r.name || String(r.display_name || "Place").split(",")[0];
+
+        const el = document.createElement("div");
+        el.className = "search-pin-wrap";
+        el.innerHTML = `<div class="search-pin-dot"></div><div class="search-pin-label">${esc(title)}</div>`;
+
+        const popup = new maplibregl.Popup({ offset: 14, closeButton: false, maxWidth: "240px" }).setHTML(
+          `<div class="popup-title">${esc(title)}</div><div class="popup-meta">${esc(r.display_name || "")}</div><button class="btn primary" style="margin-top:8px;width:100%;" data-action="add-search-result" data-index="${index}">＋ Add this pin</button>`
+        );
+
+        const marker = new maplibregl.Marker({ element: el, anchor: "left" })
+          .setLngLat([lng, lat])
+          .setPopup(popup)
+          .addTo(map);
+
+        searchResultMarkers.push(marker);
+      });
+
+      toast(`${results.length} place${results.length === 1 ? "" : "s"} found — tap a pin to see it.`);
+
+      if (coords.length > 1) {
+        const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
+        map.fitBounds(bounds, { padding: { top: 140, right: 40, bottom: 220, left: 40 }, maxZoom: 16, duration: 600 });
+      } else if (coords.length === 1) {
+        setMapView(coords[0][1], coords[0][0], 15, true);
+      }
+    }
+
+    async function toggleTransit() {
+      settings.transitVisible = !settings.transitVisible;
+      saveSettings();
+        if (!settings.transitVisible) {
+        transitMarkers.forEach(marker => marker.remove());
+        transitMarkers = [];
+        toast("Transit stops hidden.");
+        return;
+      }
+      await loadTransitStops();
+    }
+
+    async function loadTransitStops() {
+      const center = map.getCenter();
+      if (map.getZoom() < 13) map.setZoom(13);
+      transitMarkers.forEach(marker => marker.remove());
+      transitMarkers = [];
+      toast("Loading nearby transit stops…");
+
+      const bounds = map.getBounds();
+      const padLat = Math.max((bounds.getNorth() - bounds.getSouth()) * 0.45, 0.018);
+      const padLng = Math.max((bounds.getEast() - bounds.getWest()) * 0.45, 0.025);
+      const south = Math.max(47.48, bounds.getSouth() - padLat);
+      const west = Math.max(-122.47, bounds.getWest() - padLng);
+      const north = Math.min(47.75, bounds.getNorth() + padLat);
+      const east = Math.min(-122.20, bounds.getEast() + padLng);
+
+      const query = `[out:json][timeout:22];(
+        nwr(${south},${west},${north},${east})["highway"="bus_stop"];
+        nwr(${south},${west},${north},${east})["public_transport"~"platform|station|stop_position"];
+        nwr(${south},${west},${north},${east})["railway"~"station|halt|tram_stop|subway_entrance"];
+      );out center tags;`;
+
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.nchc.org.tw/api/interpreter"
+      ];
+
+      let elements = null;
+      for (const endpoint of endpoints) {
+        try {
+          const url = `${endpoint}?data=${encodeURIComponent(query)}`;
+          const response = await fetch(url, { headers: { "Accept": "application/json" } });
+          if (!response.ok) continue;
+          const data = await response.json();
+          if (Array.isArray(data.elements)) { elements = data.elements; break; }
+        } catch (_) {}
+      }
+
+      const candidates = Array.isArray(elements) ? elements.map(item => ({
+        name: item.tags?.name || item.tags?.ref || item.tags?.local_ref || "Transit stop",
+        lat: Number(item.lat ?? item.center?.lat),
+        lng: Number(item.lon ?? item.center?.lon),
+        rail: Boolean(item.tags?.railway || item.tags?.station === "subway" || item.tags?.train === "yes" || item.tags?.light_rail === "yes")
+      })) : [];
+
+      const nearUW = Math.abs(center.lat - UW.lat) < 0.08 && Math.abs(center.lng - UW.lng) < 0.10;
+      if (nearUW) candidates.push(...UW_TRANSIT_FALLBACK);
+
+      const seen = new Set();
+      let count = 0;
+      for (const item of candidates) {
+        const lat = Number(item.lat);
+        const lng = Number(item.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        if (lat < south || lat > north || lng < west || lng > east) continue;
+        const name = item.name || "Transit stop";
+        const key = `${name.toLowerCase()}|${lat.toFixed(4)}|${lng.toFixed(4)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const isRail = Boolean(item.rail);
+        const el = document.createElement("div");
+        el.className = "transit-marker";
+        el.innerHTML = `<div class="transit-bubble">${isRail ? "🚉" : "🚌"}</div>`;
+        el.title = name;
+        const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+          .setLngLat([lng, lat])
+          .setPopup(new maplibregl.Popup({ offset: 18, closeButton: false }).setHTML(`<div class="popup-title">${isRail ? "🚉" : "🚌"} ${esc(name)}</div><div class="popup-meta">Tap for directions or save this transit location.</div>`))
+          .addTo(map);
+        el.addEventListener("click", () => {
+          setTimeout(() => {
+            openSheet(`
+              <div class="sheet-head"><h2>${isRail ? "Rail station" : "Transit stop"}</h2><button class="close-btn" data-action="close">×</button></div>
+              <div class="place-title"><div class="big-emoji">${isRail ? "🚉" : "🚌"}</div><div><h2>${esc(name)}</h2><p>Nearby transit location</p></div></div>
+              <div class="actions">
+                <button class="btn primary" data-action="transit-to-stop" data-lat="${lat}" data-lng="${lng}">🚌 Directions here</button>
+                <button class="btn gold" data-action="save-transit-stop" data-lat="${lat}" data-lng="${lng}" data-name="${esc(name)}">📍 Save stop</button>
+              </div>
+            `);
+          }, 80);
+        });
+        transitMarkers.push(marker);
+        count++;
+        if (count >= 180) break;
+      }
+
+      if (count) {
+        toast(`${count} nearby transit locations loaded.`);
+      } else {
+        settings.transitVisible = false;
+        saveSettings();
+        document.getElementById("transitBtn")?.classList.remove("active");
+        toast("Transit data could not load. Try the UW button, then Transit again.");
+      }
+    }
+
+
+    const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+    function placeOptions(selected="") {
+      return `<option value="">Choose a saved place</option>` + places.map(p => `<option value="${p.id}" ${p.id===selected?"selected":""}>${(CATEGORIES[p.category]||CATEGORIES.other).emoji} ${esc(p.title)}</option>`).join("");
+    }
+
+    function eventDaysLabel(item) {
+      const days = Array.isArray(item.days) ? item.days : [];
+      if (days.length === 7) return "Every day";
+      return days.map(d => DAYS[d]).join(", ") || "One-time / unscheduled";
+    }
+
+    function todayEvents() {
+      const day = new Date().getDay();
+      const now = new Date();
+      const mins = now.getHours()*60 + now.getMinutes();
+      return schedule.filter(e => (e.days||[]).includes(day)).map(e => {
+        const [h,m] = String(e.time||"00:00").split(":").map(Number);
+        return {...e, _mins:h*60+m};
+      }).filter(e => e._mins >= mins-15).sort((a,b)=>a._mins-b._mins);
+    }
+
+    function formatTime(value) {
+      if (!value) return "";
+      const [h,m]=value.split(":").map(Number);
+      return new Date(2000,0,1,h,m).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+    }
+
+    function showDashboard() {
+      openSheet(`
+        <div class="sheet-head"><h2>MyMap</h2><button class="close-btn" data-action="close">×</button></div>
+        <div class="quick-grid">
+          <button class="quick-card" data-action="go-category" data-category="home"><span>🏠</span>Home</button>
+          <button class="quick-card" data-action="show-school"><span>🎓</span>School buildings</button>
+          <button class="quick-card" data-action="go-category" data-category="work"><span>💼</span>Work</button>
+          <button class="quick-card" data-action="show-schedule"><span>📅</span>Schedule</button>
+          <button class="quick-card" data-action="show-neighborhoods"><span>🗺️</span>Neighborhoods</button>
+          <button class="quick-card" data-action="toggle-transit"><span>🚉</span>Nearby transit</button>
+          <button class="quick-card" data-action="show-meet"><span>🤝</span>Meet Me</button>
+          <button class="quick-card" data-action="show-findme"><span>📍</span>Find Me</button>
+        </div>
+      `);
+    }
+
+    function splitTime(value = "") {
+      const match = /^(\d{1,2}):(\d{2})$/.exec(String(value));
+      let hour24 = match ? Number(match[1]) : 9;
+      const minute = match ? Number(match[2]) : 0;
+      const ampm = hour24 >= 12 ? "PM" : "AM";
+      let hour = hour24 % 12;
+      if (hour === 0) hour = 12;
+      return { hour, minute, ampm };
+    }
+
+    function timeSelectHTML(prefix, value = "") {
+      const t = splitTime(value);
+      const hours = Array.from({length:12}, (_,i)=>i+1).map(h=>`<option value="${h}" ${h===t.hour?"selected":""}>${h}</option>`).join("");
+      const minutes = Array.from({length:12}, (_,i)=>i*5).map(m=>`<option value="${String(m).padStart(2,"0")}" ${m===Math.round(t.minute/5)*5%60?"selected":""}>${String(m).padStart(2,"0")}</option>`).join("");
+      return `<div class="time-row"><select name="${prefix}Hour" aria-label="Hour">${hours}</select><select name="${prefix}Minute" aria-label="Minute">${minutes}</select><select name="${prefix}AmPm" aria-label="AM or PM"><option ${t.ampm==="AM"?"selected":""}>AM</option><option ${t.ampm==="PM"?"selected":""}>PM</option></select></div>`;
+    }
+
+    function readTime(data, prefix) {
+      let hour = Number(data.get(prefix + "Hour"));
+      const minute = Number(data.get(prefix + "Minute"));
+      const ampm = String(data.get(prefix + "AmPm") || "AM");
+      if (!Number.isFinite(hour) || !Number.isFinite(minute)) return "";
+      if (ampm === "PM" && hour !== 12) hour += 12;
+      if (ampm === "AM" && hour === 12) hour = 0;
+      return `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
+    }
+
+    function showSchedule() {
+      const items=[...schedule].sort((a,b)=>(a.time||"").localeCompare(b.time||"")).map(e=>{
+        const place=places.find(p=>p.id===e.placeId);
+        return `<div class="event-card"><h3>${esc(e.title)}</h3><p>⏰ ${formatTime(e.time)} · ${esc(eventDaysLabel(e))}</p><p>📍 ${place?esc(place.title):"No location selected"}</p><div class="event-actions"><button class="btn primary" data-action="plan-event" data-id="${e.id}">Plan trip</button><button class="btn" data-action="edit-event" data-id="${e.id}">Edit</button></div></div>`;
+      }).join("") || `<div class="empty"><span class="big">📅</span>No schedule items yet. Add classes, work shifts, appointments, or regular trips.</div>`;
+      openSheet(`<div class="sheet-head"><h2>Schedule</h2><button class="close-btn" data-action="close">×</button></div><button class="btn gold" data-action="add-event">＋ Add class, work, or event</button>${items}`);
+    }
+
+    function showEventForm(item={}) {
+      const selectedDays=Array.isArray(item.days)?item.days:[];
+      const dayBoxes=DAYS.map((d,i)=>`<label class="day-check"><input type="checkbox" name="day" value="${i}" ${selectedDays.includes(i)?"checked":""}>${d}</label>`).join("");
+      openSheet(`<div class="sheet-head"><h2>${item.id?"Edit":"Add"} schedule item</h2><button class="close-btn" data-action="close">×</button></div>
+      <form id="eventForm" data-id="${item.id||""}">
+        <div class="field"><label>Name</label><input name="title" required maxlength="80" value="${esc(item.title||"")}" placeholder="Biology 101, work, appointment…"></div>
+        <div class="field"><label>Saved destination</label><select name="placeId" required>${placeOptions(item.placeId||"")}</select><small>Save each UW building as its own place, then connect the class to that building.</small></div>
+        <div class="field"><label>Start / arrival time</label>${timeSelectHTML("time", item.time||"")}</div>
+        <div class="field"><label>Days</label><div class="day-grid">${dayBoxes}</div></div>
+        <div class="field"><label>Notes</label><textarea name="notes" maxlength="500">${esc(item.notes||"")}</textarea></div>
+        <div class="actions">${item.id?`<button type="button" class="btn danger" data-action="delete-event" data-id="${item.id}">Delete</button>`:""}<button class="btn primary" type="submit">Save schedule</button></div>
+      </form>`);
+    }
+
+    function saveEvent(form) {
+      const data=new FormData(form); const id=form.dataset.id||uid();
+      const item={id,title:String(data.get("title")||"").trim(),placeId:String(data.get("placeId")||""),time:readTime(data,"time"),days:data.getAll("day").map(Number),notes:String(data.get("notes")||"").trim()};
+      if(!item.title||!item.placeId||!item.time) return toast("Add a name, destination, and time.");
+      const i=schedule.findIndex(e=>e.id===id); if(i>=0)schedule[i]=item; else schedule.push(item); saveSchedule(); showSchedule(); toast("Schedule saved.");
+    }
+
+    function showTripPlanner(destinationId="", eventId="") {
+      const event=schedule.find(e=>e.id===eventId); if(event&&!destinationId)destinationId=event.placeId;
+      const home=places.find(p=>p.category==="home");
+      openSheet(`<div class="sheet-head"><h2>Plan a trip</h2><button class="close-btn" data-action="close">×</button></div>
+      <form id="tripForm">
+        <div class="field"><label>Starting from</label><select name="origin"><option value="current">◎ Current location</option>${placeOptions(home?.id||"")}</select></div>
+        <div class="field"><label>Going to</label><select name="destination" required>${placeOptions(destinationId)}</select></div>
+        <div class="field"><label>When</label><select name="timing" id="tripTiming"><option value="now">Leave now</option><option value="arrive">Arrive by</option></select></div>
+        <div class="field" id="arrivalField" hidden><label>Arrival time</label>${timeSelectHTML("arrival", event?.time||"")}</div>
+        <div class="actions"><button class="btn success" type="button" data-action="open-walk-plan">🚶 Walk</button><button class="btn primary" type="submit">🚌 Public transit</button></div>
+      </form>`);
+      setTimeout(()=>{const t=document.getElementById("tripTiming"),f=document.getElementById("arrivalField"); if(t)t.onchange=()=>f.hidden=t.value!=="arrive"; if(event?.time&&t){t.value="arrive";f.hidden=false;}},50);
+    }
+
+    function launchTrip(form, mode) {
+      const data=new FormData(form); const dest=places.find(p=>p.id===data.get("destination")); if(!dest)return toast("Choose a destination.");
+      let origin=""; const ov=data.get("origin");
+      if(ov==="current") { if(userLocation) origin=`&origin=${userLocation.lat},${userLocation.lng}`; }
+      else { const op=places.find(p=>p.id===ov); if(op)origin=`&origin=${op.lat},${op.lng}`; }
+      const url=`https://www.google.com/maps/dir/?api=1${origin}&destination=${dest.lat},${dest.lng}&travelmode=${mode}&dir_action=navigate`;
+      if(data.get("timing")==="arrive") toast(`Google Maps will open. Choose Arrive by ${formatTime(readTime(data,"arrival"))}.`);
+      window.open(url,"_blank","noopener,noreferrer");
+    }
+
+    function showNeighborhoods() {
+      const buttons=Object.entries(NEIGHBORHOODS).map(([k,n])=>`<button class="menu-item" data-action="jump-neighborhood" data-key="${k}">${k==="uw"?"🎓":"📍"} ${esc(n.label)}</button>`).join("");
+      openSheet(`<div class="sheet-head"><h2>Seattle neighborhoods</h2><button class="close-btn" data-action="close">×</button></div><div class="menu-list">${buttons}</div>`);
+    }
+
+    function showMeetMe() {
+      openSheet(`<div class="sheet-head"><h2>Meet Me</h2><button class="close-btn" data-action="close">×</button></div>
+
+      <form id="meetForm"><div class="field"><label>Person 1 starts at</label><select name="a" required>${placeOptions()}</select></div><div class="field"><label>Person 2 starts at</label><select name="b" required>${placeOptions()}</select></div><button class="btn primary" type="submit">Show meeting area</button></form>`);
+    }
+
+    function runMeetMe(form) {
+      const d=new FormData(form),a=places.find(p=>p.id===d.get("a")),b=places.find(p=>p.id===d.get("b")); if(!a||!b)return toast("Choose two saved places.");
+      closeSheet(); setMapView((a.lat+b.lat)/2,(a.lng+b.lng)/2,14.5,true); document.getElementById("searchInput").value="coffee"; toast("Showing the middle area. Search for coffee, food, parks, or another place.");
+    }
+
+    function generateShareCode() {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    }
+
+    function myShareColumn() { return shareSession && shareSession.role === "creator" ? "creator_sharing" : "partner_sharing"; }
+    function theirShareColumn() { return shareSession && shareSession.role === "creator" ? "partner_sharing" : "creator_sharing"; }
+
+    function showFindMe() {
+      if (shareSession) {
+        openSheet(`
+          <div class="sheet-head"><h2>Find Me</h2><button class="close-btn" data-action="close">×</button></div>
+          <p class="place-note" id="findMeStatusLine">Checking connection…</p>
+          <button class="btn primary" data-action="findme-toggle" id="findMeToggleBtn" style="font-size:17px;padding:16px;">
+            ${sharingOn ? "Stop Sharing My Location" : "Share My Location"}
+          </button>
+          <button class="btn" data-action="findme-unpair" style="margin-top:14px;background:transparent;color:#a33b67;box-shadow:none;">Unpair from this person</button>
+        `);
+        const btn = document.getElementById("findMeToggleBtn");
+        if (btn) btn.style.background = sharingOn ? "#dc3545" : "";
+        refreshFindMeStatusLine();
+        return;
+      }
+
+      openSheet(`
+        <div class="sheet-head"><h2>Find Me</h2><button class="close-btn" data-action="close">×</button></div>
+        <p class="place-note">Pair with one person, one time — after that, sharing your location is just a single button, no code needed again.</p>
+        <button class="btn primary" data-action="findme-create">Create a code</button>
+        <div class="field" style="margin-top:14px;">
+          <label>Or enter a code someone shared with you</label>
+          <form id="findMeEnterForm">
+            <input type="text" name="code" maxlength="6" placeholder="ABC123" autocomplete="off" style="text-transform:uppercase;letter-spacing:2px;font-size:18px;" />
+            <button class="btn primary" type="submit" style="margin-top:8px;">Join</button>
           </form>
         </div>
-        <div id="searchResults"></div>
-      </section>
+      `);
+    }
 
-      <section class="screen" id="listScreen">
-        <div class="hero">
-          <p class="eyebrow">Your choices</p>
-          <h2>My list</h2>
-          <p>Saved ideas, watched titles, favorites, and actors you enjoy.</p>
-        </div>
-        <div class="list-tabs" id="listTabs">
-          <button class="chip active" data-list="saved">Saved</button>
-          <button class="chip" data-list="watched">Watched</button>
-          <button class="chip" data-list="loved">Loved</button>
-          <button class="chip" data-list="liked">Liked</button>
-          <button class="chip" data-list="actors">Actors</button>
-          <button class="chip" data-list="not_for_me">Not for me</button>
-        </div>
-        <div id="listResults"></div>
-      </section>
-    </main>
+    async function createFindMeCode() {
+      const code = generateShareCode();
+      toast("Creating code…");
 
-    <nav class="bottom-nav" aria-label="Main navigation">
-      <button class="nav-button active" data-screen="pick"><span>✨</span>Pick</button>
-      <button class="nav-button" data-screen="search"><span>⌕</span>Search</button>
-      <button class="nav-button" data-screen="list"><span>♡</span>My List</button>
-    </nav>
-  </div>
+      const { error } = await mymapSupabase.from("mymap_shares").insert({ code, creator_id: myDeviceId });
+      if (error) { toast("Couldn't create a code. Try again."); return; }
 
-  <div class="modal-backdrop hidden" id="modalBackdrop" role="dialog" aria-modal="true">
-    <div class="modal" id="modal">
-      <div class="modal-handle"></div>
-      <div class="modal-top">
-        <strong id="modalTitle">Details</strong>
-        <button class="icon-button" id="closeModal" aria-label="Close">✕</button>
-      </div>
-      <div class="modal-content" id="modalContent"></div>
-    </div>
-  </div>
+      shareSession = { code, role: "creator" };
+      localStorage.setItem(SHARE_KEY, JSON.stringify(shareSession));
+      subscribeToPairChannel();
+      showFindMePairedShareStep(code);
+    }
 
-  <div class="toast" id="toast"></div>
+    function showFindMePairedShareStep(code) {
+      openSheet(`
+        <div class="sheet-head"><h2>Send this code</h2><button class="close-btn" data-action="close">×</button></div>
+        <p class="place-note">Send this to the one person you want paired with. You'll only need to do this once.</p>
+        <p class="place-note" style="font-size:26px;letter-spacing:4px;text-align:center;"><strong>${esc(code)}</strong></p>
+        <button class="btn primary" data-action="findme-share-code" data-code="${esc(code)}">Share this code</button>
+      `);
+    }
 
-  <script>
-    (() => {
-      "use strict";
+    async function submitFindMeCode(rawCode) {
+      const code = rawCode.trim().toUpperCase();
+      if (code.length < 4) { toast("Enter the full code."); return; }
 
-      const API_BASE = "https://api.themoviedb.org/3";
-      const IMG = {
-        poster: "https://image.tmdb.org/t/p/w500",
-        profile: "https://image.tmdb.org/t/p/w300",
-        backdrop: "https://image.tmdb.org/t/p/w1280",
-        logo: "https://image.tmdb.org/t/p/w185"
+      toast("Joining…");
+      const { data, error } = await mymapSupabase.from("mymap_shares").select("*").eq("code", code).maybeSingle();
+
+      if (error || !data) { toast("That code wasn't found."); return; }
+      if (data.partner_id && data.partner_id !== myDeviceId) { toast("That code has already been used."); return; }
+      if (data.creator_id === myDeviceId) { toast("That's your own code."); return; }
+
+      if (!data.partner_id) {
+        const { error: updateError } = await mymapSupabase.from("mymap_shares").update({ partner_id: myDeviceId }).eq("code", code).is("partner_id", null);
+        if (updateError) { toast("That code was just used by someone else."); return; }
+      }
+
+      shareSession = { code, role: "partner" };
+      localStorage.setItem(SHARE_KEY, JSON.stringify(shareSession));
+      subscribeToPairChannel();
+      toast("Paired! You're all set.");
+      showFindMe();
+    }
+
+    async function refreshFindMeStatusLine() {
+      if (!shareSession) return;
+      const { data } = await mymapSupabase.from("mymap_shares").select("*").eq("code", shareSession.code).maybeSingle();
+      const line = document.getElementById("findMeStatusLine");
+      if (!line) return;
+
+      if (!data || !data.partner_id) { line.innerText = "Paired — waiting for the other person to finish setup."; return; }
+
+      const theirSharing = data[theirShareColumn()];
+      line.innerText = theirSharing
+        ? "Paired — they're currently sharing their location."
+        : "Paired — they're not sharing their location right now.";
+    }
+
+    function shareCodeViaSystemShare(code) {
+      const text = `Let's use Find Me on MyMap so we can see each other's location — open the app, tap Find Me, tap "Or enter a code", and enter: ${code}`;
+      if (navigator.share) {
+        navigator.share({ text }).catch(() => {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => toast("Code copied — paste it in a text!"));
+      } else {
+        toast(`Your code: ${code}`);
+      }
+    }
+
+    function renderPartnerMarker(lat, lng) {
+      partnerLat = lat;
+      partnerLng = lng;
+      updateFindPartnerButtonVisibility();
+
+      if (partnerMarker) {
+        partnerMarker.setLngLat([lng, lat]);
+      } else {
+        const el = document.createElement("div");
+        el.innerHTML = '<div class="user-dot" style="background:#a33b67;box-shadow:0 0 0 8px rgba(163,59,103,.2),0 3px 10px rgba(0,0,0,.25);"></div>';
+        el.title = "Their location";
+        partnerMarker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([lng, lat]).addTo(map);
+      }
+
+      if (followPartner) {
+        map.easeTo({ center: [lng, lat], duration: 900 });
+      }
+    }
+
+    function removePartnerMarker() {
+      if (partnerMarker) { partnerMarker.remove(); partnerMarker = null; }
+      partnerLat = null;
+      partnerLng = null;
+      updateFindPartnerButtonVisibility();
+    }
+
+    function tapFindPartnerBtn() {
+      if (partnerLat === null) { toast("No location from them yet."); return; }
+      followPartner = true;
+      followMe = false;
+      updateFindPartnerButtonVisibility();
+      updateFollowMeButtonVisibility();
+      map.easeTo({ center: [partnerLng, partnerLat], zoom: Math.max(map.getZoom(), 16) });
+    }
+
+    function updateFindPartnerButtonVisibility() {
+      const btn = document.getElementById("findPartnerBtn");
+      if (!btn) return;
+      btn.style.display = (partnerLat !== null) ? "flex" : "none";
+      btn.classList.toggle("following", followPartner);
+    }
+
+    map.on("dragstart", e => {
+      if (!e.originalEvent) return;
+      if (followPartner || followMe) {
+        followPartner = false;
+        followMe = false;
+        updateFindPartnerButtonVisibility();
+        updateFollowMeButtonVisibility();
+      }
+    });
+
+    map.on("zoomstart", e => {
+      if (!e.originalEvent) return;
+      if (followPartner || followMe) {
+        followPartner = false;
+        followMe = false;
+        updateFindPartnerButtonVisibility();
+        updateFollowMeButtonVisibility();
+      }
+    });
+
+    document.getElementById("findPartnerBtn").addEventListener("click", tapFindPartnerBtn);
+
+    function subscribeToPairChannel() {
+      if (!shareSession) return;
+      if (shareChannel) { try { shareChannel.unsubscribe(); } catch (e) {} }
+
+      shareChannel = mymapSupabase.channel(`mymap-share-${shareSession.code}`, { config: { broadcast: { ack: false, self: false } } });
+      shareChannel.on("broadcast", { event: "location" }, ({ payload }) => {
+        if (!payload || payload.deviceId === myDeviceId) return;
+        renderPartnerMarker(payload.lat, payload.lng);
+      }).on("broadcast", { event: "stopped" }, ({ payload }) => {
+        if (!payload || payload.deviceId === myDeviceId) return;
+        removePartnerMarker();
+      }).subscribe();
+
+      if (sharePollTimer) clearInterval(sharePollTimer);
+      sharePollTimer = setInterval(refreshFindMeStatusLine, 8000);
+    }
+
+    function startBroadcastingMyLocation() {
+      if (shareWatchId !== null) navigator.geolocation.clearWatch(shareWatchId);
+      if (!navigator.geolocation) return;
+
+      shareWatchId = navigator.geolocation.watchPosition(position => {
+        const now = Date.now();
+        if (now - lastBroadcastAt < 5000) return;
+        lastBroadcastAt = now;
+
+        if (shareChannel) {
+          shareChannel.send({
+            type: "broadcast",
+            event: "location",
+            payload: { deviceId: myDeviceId, lat: position.coords.latitude, lng: position.coords.longitude }
+          });
+        }
+      }, () => {}, { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 });
+    }
+
+    function stopBroadcastingMyLocation() {
+      if (shareWatchId !== null) { navigator.geolocation.clearWatch(shareWatchId); shareWatchId = null; }
+      if (shareChannel) {
+        shareChannel.send({ type: "broadcast", event: "stopped", payload: { deviceId: myDeviceId } });
+      }
+    }
+
+    async function toggleFindMeSharing() {
+      if (!shareSession) return;
+
+      sharingOn = !sharingOn;
+      localStorage.setItem(SHARING_ON_KEY, JSON.stringify(sharingOn));
+
+      await mymapSupabase.from("mymap_shares").update({ [myShareColumn()]: sharingOn }).eq("code", shareSession.code);
+
+      if (sharingOn) { startBroadcastingMyLocation(); toast("Sharing your location."); }
+      else { stopBroadcastingMyLocation(); toast("Stopped sharing your location."); }
+
+      showFindMe();
+    }
+
+    async function unpairFindMe() {
+      if (shareSession) {
+        await mymapSupabase.from("mymap_shares").delete().eq("code", shareSession.code);
+      }
+
+      if (shareChannel) { try { shareChannel.unsubscribe(); } catch (e) {} shareChannel = null; }
+      if (shareWatchId !== null) { navigator.geolocation.clearWatch(shareWatchId); shareWatchId = null; }
+      if (sharePollTimer) { clearInterval(sharePollTimer); sharePollTimer = null; }
+
+      removePartnerMarker();
+      shareSession = null;
+      sharingOn = false;
+      localStorage.removeItem(SHARE_KEY);
+      localStorage.removeItem(SHARING_ON_KEY);
+      closeSheet();
+      toast("Unpaired.");
+    }
+
+    if (shareSession) {
+      subscribeToPairChannel();
+      if (sharingOn) startBroadcastingMyLocation();
+    }
+
+    function goCategory(category) {
+      const matches=places.filter(p=>p.category===category);
+      if(!matches.length){activeFilter=category;showPins();toast(`Add a ${category} place first.`);return;}
+      if(matches.length===1){closeSheet();setMapView(matches[0].lat,matches[0].lng,16,true);showPlace(matches[0].id);} else {activeFilter=category;showPins();}
+    }
+
+    function showMenu() {
+      showDashboard();
+    }
+
+    function showHelp() {
+      openSheet(`
+        <div class="sheet-head"><h2>How to use it</h2><button class="close-btn" data-action="close">×</button></div>
+        <div class="place-note"><strong>Add a pin:</strong> Press the purple + button, then tap the exact place on the map. You can also search for a place and select a result.</div>
+        <div class="place-note"><strong>Walking and transit:</strong> Open any saved pin and press Walk or Transit. Live directions open in Google Maps using your current location when available.</div>
+        <div class="place-note"><strong>Transit stops:</strong> Press Transit to load nearby bus stops and rail stations. Use a neighborhood button first, then press Transit to load that area.</div>
+        <div class="place-note"><strong>Important places:</strong> Press + to save your home, work location, school, and each campus building you regularly visit.</div>
+        <div class="place-note"><strong>Backup:</strong> Use the MM menu to download a backup file. Restore that file on another phone or browser.</div>
+      `);
+    }
+
+    function exportData() {
+      const data = {
+        app: "MyMap",
+        version: APP_VERSION,
+        exportedAt: new Date().toISOString(),
+        places,
+        schedule
       };
-      const STORE_KEY = "watchpick.profile.v1";
-      const TOKEN_KEY = "watchpick.tmdb.token";
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mymap-backup-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+      toast("Backup downloaded.");
+    }
 
-      const MOODS = {
-        any: { genres: [], without: [], label: "a mix of your favorites" },
-        funny: { genres: [35], without: [], label: "something funny" },
-        suspenseful: { genres: [53, 9648], without: [], label: "something suspenseful" },
-        light: { genres: [35, 10749, 10751], without: [27], label: "something light" },
-        serious: { genres: [18], without: [], label: "a serious drama" },
-        action: { genres: [28, 12], without: [], label: "action or adventure" },
-        comfort: { genres: [35, 10749, 10751], without: [27, 53], label: "something comforting" },
-        true: { genres: [99, 36], without: [], label: "a true story or documentary" },
-        scary: { genres: [27], without: [], label: "something scary" }
+    async function importData(file) {
+      if (!file) return;
+      try {
+        const data = JSON.parse(await file.text());
+        if (!Array.isArray(data.places)) throw new Error("Invalid backup");
+        const cleaned = data.places.filter(p => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.title).map(p => ({
+          id: String(p.id || uid()),
+          title: String(p.title).slice(0,80),
+          category: CATEGORIES[p.category] ? p.category : "other",
+          address: String(p.address || "").slice(0,180),
+          notes: String(p.notes || "").slice(0,1500),
+          favorite: Boolean(p.favorite),
+          visited: Boolean(p.visited),
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+          createdAt: p.createdAt || new Date().toISOString(),
+          updatedAt: p.updatedAt || new Date().toISOString()
+        }));
+        if (!confirm(`Restore ${cleaned.length} pins? This will replace the pins currently on this device.`)) return;
+        places = cleaned;
+        schedule = Array.isArray(data.schedule) ? data.schedule : schedule;
+        savePlaces();
+        saveSchedule();
+        renderMarkers();
+        closeSheet();
+        toast(`${places.length} pins restored.`);
+      } catch (_) {
+        toast("That file is not a valid MyMap backup.");
+      } finally {
+        document.getElementById("importInput").value = "";
+      }
+    }
+
+    map.on("click", event => {
+      if (placementMode) startAdd({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+    });
+
+    map.on("contextmenu", event => {
+      startAdd({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+    });
+
+    document.getElementById("searchForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const input = document.getElementById("searchInput");
+      input.blur();
+      searchPlaces(input.value);
+    });
+
+    document.addEventListener("click", event => {
+      const button = event.target.closest("[data-action='add-search-result']");
+      if (!button) return;
+      const result = lastSearchResults[Number(button.dataset.index)];
+      if (!result) return;
+      const lat = Number(result.lat);
+      const lng = Number(result.lon);
+      const title = result.name || String(result.display_name || "Place").split(",")[0];
+      document.querySelectorAll(".maplibregl-popup").forEach(p => p.remove());
+      startAdd({ lat, lng }, { title, address: result.display_name || "", category: guessCategory(result) });
+    });
+
+    (function setupSearchMic() {
+      const micBtn = document.getElementById("searchMicBtn");
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) { micBtn.style.display = "none"; return; }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+      let listening = false;
+
+      recognition.onstart = () => { listening = true; micBtn.classList.add("listening"); micBtn.innerText = "●"; };
+      recognition.onend = () => { listening = false; micBtn.classList.remove("listening"); micBtn.innerText = "🎤"; };
+      recognition.onerror = () => { listening = false; micBtn.classList.remove("listening"); micBtn.innerText = "🎤"; };
+
+      recognition.onresult = event => {
+        const transcript = event.results[0][0].transcript.trim();
+        if (!transcript) return;
+        const input = document.getElementById("searchInput");
+        input.value = transcript;
+        input.blur();
+        searchPlaces(transcript);
       };
 
-      const state = {
-        screen: "pick",
-        media: "all",
-        mood: "any",
-        list: "saved",
-        pickRound: 0,
-        profile: loadProfile(),
-        modalItem: null,
-        providers: [],
-        runtimeItems: {}
-      };
-
-      const els = {
-        pickScreen: document.getElementById("pickScreen"),
-        searchScreen: document.getElementById("searchScreen"),
-        listScreen: document.getElementById("listScreen"),
-        pickResults: document.getElementById("pickResults"),
-        searchResults: document.getElementById("searchResults"),
-        listResults: document.getElementById("listResults"),
-        searchInput: document.getElementById("searchInput"),
-        modalBackdrop: document.getElementById("modalBackdrop"),
-        modalTitle: document.getElementById("modalTitle"),
-        modalContent: document.getElementById("modalContent"),
-        toast: document.getElementById("toast"),
-        connectionNotice: document.getElementById("connectionNotice"),
-        learningNote: document.getElementById("learningNote")
-      };
-
-      function defaultProfile() {
-        return {
-          items: {},
-          actors: {},
-          settings: {
-            region: "US",
-            providerIds: [],
-            hideWatched: true,
-            allowRewatches: false
-          }
-        };
-      }
-
-      function loadProfile() {
-        try {
-          const parsed = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-          if (!parsed || typeof parsed !== "object") return defaultProfile();
-          return {
-            ...defaultProfile(),
-            ...parsed,
-            items: parsed.items || {},
-            actors: parsed.actors || {},
-            settings: { ...defaultProfile().settings, ...(parsed.settings || {}) }
-          };
-        } catch {
-          return defaultProfile();
-        }
-      }
-
-      function saveProfile() {
-        localStorage.setItem(STORE_KEY, JSON.stringify(state.profile));
-        updateLearningNote();
-      }
-
-      function getToken() {
-        return (localStorage.getItem(TOKEN_KEY) || "").trim();
-      }
-
-      function keyFor(item) {
-        const type = normalizeType(item.media_type || item.type);
-        return `${type}:${item.id}`;
-      }
-
-      function normalizeType(type) {
-        return type === "tv" ? "tv" : "movie";
-      }
-
-      function titleOf(item) {
-        return item.title || item.name || item.original_title || item.original_name || "Untitled";
-      }
-
-      function dateOf(item) {
-        return item.release_date || item.first_air_date || "";
-      }
-
-      function yearOf(item) {
-        const date = dateOf(item);
-        return date ? String(date).slice(0, 4) : "—";
-      }
-
-      function snapshot(item) {
-        const type = normalizeType(item.media_type || item.type);
-        return {
-          id: item.id,
-          media_type: type,
-          title: titleOf(item),
-          name: titleOf(item),
-          poster_path: item.poster_path || null,
-          backdrop_path: item.backdrop_path || null,
-          release_date: type === "movie" ? dateOf(item) : "",
-          first_air_date: type === "tv" ? dateOf(item) : "",
-          genre_ids: item.genre_ids || (item.genres || []).map(g => g.id),
-          vote_average: Number(item.vote_average || 0),
-          popularity: Number(item.popularity || 0),
-          overview: item.overview || ""
-        };
-      }
-
-      function historyFor(item) {
-        return state.profile.items[keyFor(item)] || {};
-      }
-
-      function updateItem(item, patch) {
-        const key = keyFor(item);
-        const old = state.profile.items[key] || {};
-        state.profile.items[key] = {
-          ...old,
-          ...snapshot(item),
-          ...patch,
-          updatedAt: Date.now()
-        };
-        saveProfile();
-      }
-
-      function toggleSaved(item) {
-        const old = historyFor(item);
-        updateItem(item, { saved: !old.saved });
-        toast(!old.saved ? "Saved to your list" : "Removed from saved list");
-        refreshVisibleCards();
-      }
-
-      function toggleWatched(item) {
-        const old = historyFor(item);
-        updateItem(item, { watched: !old.watched });
-        toast(!old.watched ? "Marked as watched" : "Removed from watched");
-        refreshVisibleCards();
-      }
-
-      function setReaction(item, reaction) {
-        const old = historyFor(item);
-        const next = old.reaction === reaction ? "" : reaction;
-        const patch = { reaction: next };
-        if (next === "love" || next === "like") patch.watched = true;
-        updateItem(item, patch);
-        const message = next === "love" ? "Added to things you love" :
-          next === "like" ? "Added to things you like" :
-          next === "not_for_me" ? "This will be avoided in future picks" :
-          "Reaction removed";
-        toast(message);
-        refreshVisibleCards();
-        if (state.modalItem) renderDetailActions(state.modalItem);
-      }
-
-      function refreshVisibleCards() {
-        document.querySelectorAll(".media-card[data-key]").forEach(card => {
-          const key = card.dataset.key;
-          const savedButton = card.querySelector('[data-quick="save"]');
-          const watchedButton = card.querySelector('[data-quick="watched"]');
-          const history = state.profile.items[key] || {};
-          if (savedButton) {
-            savedButton.classList.toggle("active", !!history.saved);
-            savedButton.textContent = history.saved ? "✓ Saved" : "+ Save";
-          }
-          if (watchedButton) {
-            watchedButton.classList.toggle("active", !!history.watched);
-            watchedButton.textContent = history.watched ? "✓ Watched" : "Watched";
-          }
-          const badge = card.querySelector(".state-badge");
-          if (badge) {
-            const icon = history.reaction === "love" ? "♥" : history.reaction === "like" ? "👍" : history.watched ? "✓" : history.saved ? "＋" : "";
-            badge.textContent = icon;
-            badge.classList.toggle("hidden", !icon);
-          }
-        });
-        if (state.screen === "list") renderList();
-      }
-
-      async function api(path, params = {}) {
-        const token = getToken();
-        if (!token) throw new Error("TMDB_NOT_CONNECTED");
-        const url = new URL(API_BASE + path);
-        Object.entries({ language: "en-US", ...params }).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, value);
-        });
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            accept: "application/json"
-          }
-        });
-        if (response.status === 401) throw new Error("TMDB_BAD_TOKEN");
-        if (!response.ok) throw new Error(`TMDB_${response.status}`);
-        return response.json();
-      }
-
-      async function testToken(token) {
-        const response = await fetch(`${API_BASE}/configuration`, {
-          headers: { Authorization: `Bearer ${token}`, accept: "application/json" }
-        });
-        return response.ok;
-      }
-
-      function escapeHtml(value) {
-        return String(value ?? "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/\"/g, "&quot;")
-          .replace(/'/g, "&#039;");
-      }
-
-      function posterHtml(item, profile = false) {
-        const path = profile ? item.profile_path : item.poster_path;
-        if (path) {
-          const base = profile ? IMG.profile : IMG.poster;
-          return `<img src="${base}${path}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=&quot;poster-fallback&quot;>${escapeHtml(titleOf(item))}</div>'">`;
-        }
-        return `<div class="poster-fallback">${escapeHtml(titleOf(item))}</div>`;
-      }
-
-      function mediaCard(item, options = {}) {
-        const type = normalizeType(item.media_type || item.type);
-        const snap = snapshot({ ...item, media_type: type });
-        const key = keyFor(snap);
-        state.runtimeItems[key] = snap;
-        const history = state.profile.items[key] || {};
-        const icon = history.reaction === "love" ? "♥" : history.reaction === "like" ? "👍" : history.watched ? "✓" : history.saved ? "＋" : "";
-        const reason = options.reason || item._reason || "";
-        return `
-          <article class="media-card" data-key="${key}">
-            <button class="card-main" data-open-media="${type}" data-id="${item.id}" type="button">
-              <div class="poster-wrap">
-                ${posterHtml(item)}
-                <span class="type-badge">${type === "tv" ? "TV" : "MOVIE"}</span>
-                <span class="state-badge ${icon ? "" : "hidden"}">${icon}</span>
-              </div>
-              <div class="card-body">
-                <h3 class="card-title">${escapeHtml(titleOf(item))}</h3>
-                <div class="card-meta"><span>${escapeHtml(yearOf(item))}</span><span>${item.vote_average ? `★ ${Number(item.vote_average).toFixed(1)}` : ""}</span></div>
-                ${reason ? `<p class="card-reason">${escapeHtml(reason)}</p>` : ""}
-              </div>
-            </button>
-            <div class="quick-actions">
-              <button type="button" data-quick="save" data-key="${key}" class="${history.saved ? "active" : ""}">${history.saved ? "✓ Saved" : "+ Save"}</button>
-              <button type="button" data-quick="watched" data-key="${key}" class="${history.watched ? "active" : ""}">${history.watched ? "✓ Watched" : "Watched"}</button>
-            </div>
-          </article>`;
-      }
-
-      function personCard(person) {
-        const actor = state.profile.actors[String(person.id)] || {};
-        return `
-          <article class="media-card person-card">
-            <button class="card-main" data-open-person="${person.id}" type="button">
-              <div class="poster-wrap">
-                ${posterHtml(person, true)}
-                <span class="type-badge">ACTOR</span>
-                <span class="state-badge ${actor.favorite ? "" : "hidden"}">♥</span>
-              </div>
-              <div class="card-body">
-                <h3 class="card-title">${escapeHtml(person.name)}</h3>
-                <div class="card-meta"><span>${escapeHtml(person.known_for_department || "Performer")}</span></div>
-                <p class="card-reason">${actor.favorite ? "One of your favorite actors" : "See movies and TV shows"}</p>
-              </div>
-            </button>
-            <div class="quick-actions" style="grid-template-columns:1fr">
-              <button type="button" data-favorite-person="${person.id}" class="${actor.favorite ? "active" : ""}">${actor.favorite ? "♥ Favorite actor" : "♡ Like this actor"}</button>
-            </div>
-          </article>`;
-      }
-
-      function renderCards(items, target, emptyMessage, options = {}) {
-        if (!items.length) {
-          target.innerHTML = `<div class="empty-state"><div class="empty-icon">🎬</div>${escapeHtml(emptyMessage)}</div>`;
-          return;
-        }
-        target.innerHTML = `${options.heading ? `<div class="section-head" style="margin-top:22px"><h3>${escapeHtml(options.heading)}</h3>${options.action || ""}</div>` : ""}<div class="cards-grid">${items.map(item => mediaCard(item)).join("")}</div>`;
-      }
-
-      function connectionCard() {
-        return `
-          <div class="setup-card">
-            <h3>Connect the movie database</h3>
-            <div class="help-text">WatchPick uses TMDB for movie, TV, actor, poster, recommendation, and streaming information. Your private watch history stays in this browser.</div>
-            <ol class="steps">
-              <li>Create or sign in to a free TMDB account.</li>
-              <li>Open account settings, choose <strong>API</strong>, and copy the <strong>API Read Access Token</strong>.</li>
-              <li>Paste it into WatchPick settings.</li>
-            </ol>
-            <div class="button-row">
-              <a class="primary-button" style="text-decoration:none;text-align:center" href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">Open TMDB API settings</a>
-              <button class="secondary-button" type="button" data-open-settings>Enter token</button>
-            </div>
-          </div>`;
-      }
-
-      function updateConnectionNotice() {
-        els.connectionNotice.innerHTML = getToken() ? "" : connectionCard();
-      }
-
-      function updateLearningNote() {
-        const values = Object.values(state.profile.items);
-        const reactions = values.filter(x => x.reaction === "love" || x.reaction === "like").length;
-        const watched = values.filter(x => x.watched).length;
-        const actors = Object.values(state.profile.actors).filter(x => x.favorite).length;
-        if (!reactions && !actors) {
-          els.learningNote.textContent = "Mark things you love, like, or have watched. Your picks will improve automatically.";
-        } else {
-          const parts = [];
-          if (reactions) parts.push(`${reactions} liked title${reactions === 1 ? "" : "s"}`);
-          if (actors) parts.push(`${actors} favorite actor${actors === 1 ? "" : "s"}`);
-          if (watched) parts.push(`${watched} watched`);
-          els.learningNote.textContent = `Learning from ${parts.join(", ")}.`;
-        }
-      }
-
-      function showScreen(name) {
-        state.screen = name;
-        document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-        document.getElementById(`${name}Screen`).classList.add("active");
-        document.querySelectorAll(".nav-button").forEach(b => b.classList.toggle("active", b.dataset.screen === name));
-        if (name === "list") renderList();
-        if (name === "search") setTimeout(() => els.searchInput.focus(), 100);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
-
-      function weightedGenres() {
-        const scores = new Map();
-        Object.values(state.profile.items).forEach(item => {
-          let weight = 0;
-          if (item.reaction === "love") weight = 5;
-          else if (item.reaction === "like") weight = 3;
-          else if (item.reaction === "not_for_me") weight = -4;
-          if (!weight) return;
-          (item.genre_ids || []).forEach(id => scores.set(id, (scores.get(id) || 0) + weight));
-        });
-        return [...scores.entries()].sort((a, b) => b[1] - a[1]);
-      }
-
-      function exclusionSet() {
-        const set = new Set();
-        Object.values(state.profile.items).forEach(item => {
-          const hideWatched = state.profile.settings.hideWatched && item.watched && !state.profile.settings.allowRewatches;
-          if (hideWatched || item.reaction === "not_for_me") set.add(keyFor(item));
-        });
-        return set;
-      }
-
-      function addCandidate(map, raw, source, reason, sourceWeight = 0) {
-        if (!raw || !raw.id) return;
-        const type = raw.media_type || (raw.title ? "movie" : raw.name ? "tv" : "movie");
-        if (type !== "movie" && type !== "tv") return;
-        if (state.media !== "all" && type !== state.media) return;
-        const item = { ...raw, media_type: type };
-        const key = keyFor(item);
-        if (!map.has(key)) {
-          map.set(key, { ...item, _sources: [], _score: 0, _reason: reason || "Picked for you" });
-        }
-        const candidate = map.get(key);
-        candidate._sources.push(source);
-        candidate._score += sourceWeight;
-        if (reason && (!candidate._reason || sourceWeight > 10)) candidate._reason = reason;
-      }
-
-      function scoreCandidates(map) {
-        const excluded = exclusionSet();
-        const genreWeights = new Map(weightedGenres());
-        const moodGenres = new Set(MOODS[state.mood].genres);
-        const moodWithout = new Set(MOODS[state.mood].without);
-        return [...map.values()].filter(item => {
-          if (excluded.has(keyFor(item))) return false;
-          const genres = item.genre_ids || [];
-          if (genres.some(g => moodWithout.has(g))) return false;
-          return true;
-        }).map(item => {
-          let score = item._score || 0;
-          const vote = Number(item.vote_average || 0);
-          const count = Number(item.vote_count || 0);
-          const popularity = Number(item.popularity || 0);
-          score += Math.min(18, vote * 1.7);
-          score += Math.min(8, Math.log10(Math.max(1, count)) * 2);
-          score += Math.min(7, Math.log10(Math.max(1, popularity)) * 2);
-          (item.genre_ids || []).forEach(id => {
-            score += Math.max(-8, Math.min(9, genreWeights.get(id) || 0));
-            if (moodGenres.has(id)) score += 6;
-          });
-          score += Math.random() * 7;
-          return { ...item, _score: score };
-        }).sort((a, b) => b._score - a._score);
-      }
-
-      async function makePicks() {
-        if (!getToken()) {
-          openSettings();
-          return;
-        }
-        state.pickRound += 1;
-        els.pickResults.innerHTML = `<div class="loading"><div><div class="spinner"></div>Finding a few good choices…</div></div>`;
-        const candidates = new Map();
-        const liked = Object.values(state.profile.items)
-          .filter(x => x.reaction === "love" || x.reaction === "like")
-          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          .slice(0, 4);
-        const favoriteActors = Object.values(state.profile.actors)
-          .filter(x => x.favorite)
-          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          .slice(0, 3);
-
-        try {
-          const tasks = [];
-
-          liked.forEach(base => {
-            const type = normalizeType(base.media_type);
-            if (state.media !== "all" && type !== state.media) return;
-            tasks.push(api(`/${type}/${base.id}/recommendations`, { page: ((state.pickRound - 1) % 3) + 1 })
-              .then(data => (data.results || []).forEach(item => addCandidate(candidates, { ...item, media_type: type }, "recommendation", `Because you ${base.reaction === "love" ? "love" : "liked"} ${base.title}`, 25)))
-              .catch(() => {}));
-          });
-
-          favoriteActors.forEach(actor => {
-            tasks.push(api(`/person/${actor.id}/combined_credits`)
-              .then(data => (data.cast || []).forEach(item => addCandidate(candidates, item, "actor", `Features ${actor.name}`, 19)))
-              .catch(() => {}));
-          });
-
-          const selectedGenres = MOODS[state.mood].genres.length
-            ? MOODS[state.mood].genres
-            : weightedGenres().filter(([, score]) => score > 0).slice(0, 3).map(([id]) => id);
-          const without = MOODS[state.mood].without;
-          const providerIds = state.profile.settings.providerIds || [];
-          const discoverParams = {
-            sort_by: state.pickRound % 2 ? "popularity.desc" : "vote_average.desc",
-            "vote_count.gte": state.pickRound % 2 ? 120 : 300,
-            page: ((state.pickRound - 1) % 5) + 1,
-            with_genres: selectedGenres.length ? selectedGenres.join("|") : "",
-            without_genres: without.length ? without.join(",") : "",
-            watch_region: providerIds.length ? state.profile.settings.region : "",
-            with_watch_providers: providerIds.length ? providerIds.join("|") : "",
-            with_watch_monetization_types: providerIds.length ? "flatrate|free|ads" : "",
-            include_adult: false
-          };
-          const types = state.media === "all" ? ["movie", "tv"] : [state.media];
-          types.forEach(type => {
-            tasks.push(api(`/discover/${type}`, discoverParams)
-              .then(data => (data.results || []).forEach(item => addCandidate(candidates, { ...item, media_type: type }, "discover", `Matches ${MOODS[state.mood].label}`, 12)))
-              .catch(() => {}));
-            tasks.push(api(`/trending/${type}/week`, { page: 1 })
-              .then(data => (data.results || []).forEach(item => addCandidate(candidates, { ...item, media_type: type }, "trending", "Popular this week", 5)))
-              .catch(() => {}));
-          });
-
-          await Promise.all(tasks);
-          const ranked = scoreCandidates(candidates);
-          const chosen = [];
-          const seenTitles = new Set();
-          for (const item of ranked) {
-            const titleKey = titleOf(item).toLowerCase();
-            if (seenTitles.has(titleKey)) continue;
-            seenTitles.add(titleKey);
-            chosen.push(item);
-            if (chosen.length === 6) break;
-          }
-
-          if (!chosen.length) {
-            els.pickResults.innerHTML = `<div class="empty-state"><div class="empty-icon">↻</div>No new matches were found with these choices. Try another mood or allow rewatches in settings.</div>`;
-            return;
-          }
-          els.pickResults.innerHTML = `
-            <div class="section-head" style="margin-top:22px">
-              <h3>Your picks</h3>
-              <button class="chip" id="refreshPicks" type="button">New picks</button>
-            </div>
-            <div class="cards-grid">${chosen.map(mediaCard).join("")}</div>`;
-          document.getElementById("refreshPicks").addEventListener("click", makePicks);
-        } catch (error) {
-          handleApiError(error, els.pickResults);
-        }
-      }
-
-      async function runSearch(query) {
-        if (!getToken()) {
-          openSettings();
-          return;
-        }
-        const q = query.trim();
-        if (!q) return;
-        els.searchResults.innerHTML = `<div class="loading"><div><div class="spinner"></div>Searching movies, shows, and actors…</div></div>`;
-        try {
-          const data = await api("/search/multi", { query: q, include_adult: false, page: 1 });
-          const results = (data.results || []).filter(x => x.media_type === "movie" || x.media_type === "tv" || x.media_type === "person");
-          if (!results.length) {
-            els.searchResults.innerHTML = `<div class="empty-state"><div class="empty-icon">⌕</div>No results found for “${escapeHtml(q)}.”</div>`;
-            return;
-          }
-          els.searchResults.innerHTML = `<div class="section-head" style="margin-top:22px"><h3>Results for “${escapeHtml(q)}”</h3></div><div class="cards-grid">${results.map(item => item.media_type === "person" ? personCard(item) : mediaCard(item)).join("")}</div>`;
-        } catch (error) {
-          handleApiError(error, els.searchResults);
-        }
-      }
-
-      function renderList() {
-        const target = els.listResults;
-        if (state.list === "actors") {
-          const actors = Object.values(state.profile.actors).filter(x => x.favorite).sort((a, b) => a.name.localeCompare(b.name));
-          if (!actors.length) {
-            target.innerHTML = `<div class="empty-state" style="margin-top:18px"><div class="empty-icon">🎭</div>Actors you mark as favorites will appear here and influence your picks.</div>`;
-          } else {
-            target.innerHTML = `<div class="cards-grid">${actors.map(personCard).join("")}</div>`;
-          }
-          return;
-        }
-        const items = Object.values(state.profile.items).filter(item => {
-          if (state.list === "saved") return item.saved;
-          if (state.list === "watched") return item.watched;
-          if (state.list === "loved") return item.reaction === "love";
-          if (state.list === "liked") return item.reaction === "like";
-          if (state.list === "not_for_me") return item.reaction === "not_for_me";
-          return false;
-        }).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-        renderCards(items, target, `Nothing is in ${state.list.replaceAll("_", " ")} yet.`);
-      }
-
-      async function openMedia(type, id) {
-        if (!getToken()) {
-          openSettings();
-          return;
-        }
-        const mediaType = normalizeType(type);
-        openModal("Loading…", `<div class="loading"><div><div class="spinner"></div>Getting details…</div></div>`);
-        try {
-          const [details, providerData] = await Promise.all([
-            api(`/${mediaType}/${id}`, { append_to_response: "credits,recommendations,videos" }),
-            api(`/${mediaType}/${id}/watch/providers`).catch(() => ({ results: {} }))
-          ]);
-          const item = { ...details, media_type: mediaType };
-          state.modalItem = item;
-          els.modalTitle.textContent = titleOf(item);
-          renderMediaDetails(item, providerData);
-        } catch (error) {
-          handleApiError(error, els.modalContent);
-        }
-      }
-
-      function runtimeText(item) {
-        if (item.media_type === "movie" && item.runtime) {
-          const hours = Math.floor(item.runtime / 60);
-          const mins = item.runtime % 60;
-          return hours ? `${hours}h ${mins}m` : `${mins}m`;
-        }
-        if (item.media_type === "tv") {
-          const runtime = item.episode_run_time?.[0];
-          if (runtime) return `${runtime}m episodes`;
-          if (item.number_of_seasons) return `${item.number_of_seasons} season${item.number_of_seasons === 1 ? "" : "s"}`;
-        }
-        return "";
-      }
-
-      function renderMediaDetails(item, providerData) {
-        const backdrop = item.backdrop_path || item.poster_path;
-        const cast = (item.credits?.cast || []).slice(0, 12);
-        const region = state.profile.settings.region || "US";
-        const providerRegion = providerData.results?.[region] || {};
-        const stream = uniqueProviders([...(providerRegion.flatrate || []), ...(providerRegion.free || []), ...(providerRegion.ads || [])]);
-        const rent = uniqueProviders(providerRegion.rent || []);
-        const buy = uniqueProviders(providerRegion.buy || []);
-        const genres = item.genres || [];
-        const rating = item.vote_average ? `★ ${Number(item.vote_average).toFixed(1)}` : "";
-        const runtime = runtimeText(item);
-        const meta = [item.media_type === "tv" ? "TV show" : "Movie", yearOf(item), runtime, rating].filter(Boolean);
-        els.modalContent.innerHTML = `
-          <div class="detail-hero">
-            ${backdrop ? `<img class="detail-backdrop" src="${item.backdrop_path ? IMG.backdrop : IMG.poster}${backdrop}" alt="">` : ""}
-            <div class="detail-shade"></div>
-            <div class="detail-title-wrap">
-              <h2>${escapeHtml(titleOf(item))}</h2>
-              <p>${meta.map(escapeHtml).join(" · ")}</p>
-            </div>
-          </div>
-
-          <div id="detailActions"></div>
-
-          <div class="meta-pills">${genres.map(g => `<span class="meta-pill">${escapeHtml(g.name)}</span>`).join("")}</div>
-          <p class="overview">${escapeHtml(item.overview || "No description is available yet.")}</p>
-
-          ${cast.length ? `
-            <div class="section-head" style="margin-top:22px"><h3>Cast</h3></div>
-            <div class="cast-row">${cast.map(person => `
-              <button class="cast-card" type="button" data-open-person="${person.id}">
-                <div class="cast-photo">${person.profile_path ? `<img src="${IMG.profile}${person.profile_path}" alt="">` : ""}</div>
-                <div class="cast-name">${escapeHtml(person.name)}</div>
-                <div class="cast-role">${escapeHtml(person.character || "")}</div>
-              </button>`).join("")}</div>` : ""}
-
-          ${stream.length ? providerSection("Stream", stream) : ""}
-          ${rent.length ? providerSection("Rent", rent) : ""}
-          ${buy.length ? providerSection("Buy", buy) : ""}
-          ${(stream.length || rent.length || buy.length) ? `<div class="help-text" style="margin-top:8px">Streaming availability for ${escapeHtml(region)} is supplied by JustWatch through TMDB and can change. <a class="text-link" href="${escapeHtml(providerRegion.link || "https://www.themoviedb.org/")}" target="_blank" rel="noopener">View current options</a>.</div>` : `<div class="suggestion-note" style="margin-top:20px">No streaming availability was returned for your selected region.</div>`}
-
-          ${(item.recommendations?.results || []).length ? `
-            <div class="section-head" style="margin-top:24px"><h3>Similar choices</h3></div>
-            <div class="cards-grid">${item.recommendations.results.slice(0, 4).map(x => mediaCard({ ...x, media_type: item.media_type })).join("")}</div>` : ""}
-        `;
-        renderDetailActions(item);
-      }
-
-      function renderDetailActions(item) {
-        const host = document.getElementById("detailActions");
-        if (!host) return;
-        const history = historyFor(item);
-        host.innerHTML = `
-          <div class="reaction-row">
-            <button class="reaction-button ${history.saved ? "active" : ""}" type="button" data-detail-action="save"><span>＋</span>Save</button>
-            <button class="reaction-button ${history.watched ? "active" : ""}" type="button" data-detail-action="watched"><span>✓</span>Watched</button>
-            <button class="reaction-button ${history.reaction === "love" ? "active" : ""}" type="button" data-reaction="love"><span>♥</span>Love it</button>
-            <button class="reaction-button ${history.reaction === "like" ? "active" : ""}" type="button" data-reaction="like"><span>👍</span>Like it</button>
-            <button class="reaction-button bad ${history.reaction === "not_for_me" ? "active" : ""}" type="button" data-reaction="not_for_me"><span>⊘</span>Not me</button>
-          </div>`;
-      }
-
-      function uniqueProviders(list) {
-        const seen = new Set();
-        return list.filter(p => {
-          if (seen.has(p.provider_id)) return false;
-          seen.add(p.provider_id);
-          return true;
-        });
-      }
-
-      function providerSection(title, providers) {
-        return `
-          <div class="section-head" style="margin-top:22px"><h3>${escapeHtml(title)}</h3></div>
-          <div class="provider-row">${providers.map(p => `
-            <div class="provider">
-              ${p.logo_path ? `<img src="${IMG.logo}${p.logo_path}" alt="">` : ""}
-              <div>${escapeHtml(p.provider_name)}</div>
-            </div>`).join("")}</div>`;
-      }
-
-      async function openPerson(id) {
-        if (!getToken()) {
-          openSettings();
-          return;
-        }
-        openModal("Actor", `<div class="loading"><div><div class="spinner"></div>Getting filmography…</div></div>`);
-        try {
-          const person = await api(`/person/${id}`, { append_to_response: "combined_credits" });
-          const actor = state.profile.actors[String(id)] || {};
-          const credits = dedupeCredits(person.combined_credits?.cast || [])
-            .filter(x => x.media_type === "movie" || x.media_type === "tv")
-            .sort((a, b) => {
-              const aDate = dateOf(a) || "0000";
-              const bDate = dateOf(b) || "0000";
-              return bDate.localeCompare(aDate) || Number(b.popularity || 0) - Number(a.popularity || 0);
-            });
-          els.modalTitle.textContent = person.name;
-          state.modalItem = null;
-          els.modalContent.innerHTML = `
-            <div class="panel" style="margin-top:4px">
-              <div style="display:flex;gap:15px;align-items:center">
-                <div class="cast-photo" style="width:96px;height:96px;flex:0 0 96px">${person.profile_path ? `<img src="${IMG.profile}${person.profile_path}" alt="">` : ""}</div>
-                <div style="min-width:0">
-                  <h2 style="font-size:1.45rem">${escapeHtml(person.name)}</h2>
-                  <p class="section-copy">${escapeHtml(person.known_for_department || "Performer")}</p>
-                  <button class="secondary-button" style="margin-top:10px;min-height:42px;padding:8px 12px" type="button" data-favorite-person="${person.id}">${actor.favorite ? "♥ Favorite actor" : "♡ Like this actor"}</button>
-                </div>
-              </div>
-              ${person.biography ? `<p class="overview" style="margin-top:16px">${escapeHtml(shorten(person.biography, 520))}</p>` : ""}
-            </div>
-            <div class="section-head" style="margin-top:23px"><h3>Movies and TV shows</h3><span class="help-text">${credits.length} credits</span></div>
-            <div class="cards-grid">${credits.slice(0, 40).map(item => mediaCard(item, { reason: actor.favorite ? `Features ${person.name}` : "" })).join("")}</div>
-          `;
-        } catch (error) {
-          handleApiError(error, els.modalContent);
-        }
-      }
-
-      function dedupeCredits(credits) {
-        const map = new Map();
-        credits.forEach(item => {
-          const key = `${item.media_type}:${item.id}`;
-          if (!map.has(key) || Number(item.episode_count || 0) > Number(map.get(key).episode_count || 0)) map.set(key, item);
-        });
-        return [...map.values()];
-      }
-
-      function shorten(text, max) {
-        if (!text || text.length <= max) return text || "";
-        return `${text.slice(0, max).trim()}…`;
-      }
-
-      async function favoritePerson(id, sourcePerson = null) {
-        let person = sourcePerson;
-        if (!person) {
-          try { person = await api(`/person/${id}`); }
-          catch { person = { id, name: `Actor ${id}` }; }
-        }
-        const current = state.profile.actors[String(id)] || {};
-        state.profile.actors[String(id)] = {
-          id: Number(id),
-          name: person.name || current.name || `Actor ${id}`,
-          profile_path: person.profile_path || current.profile_path || null,
-          known_for_department: person.known_for_department || current.known_for_department || "Acting",
-          favorite: !current.favorite,
-          updatedAt: Date.now()
-        };
-        saveProfile();
-        toast(!current.favorite ? `${person.name || "Actor"} will influence your picks` : "Actor removed from favorites");
-        document.querySelectorAll(`[data-favorite-person="${id}"]`).forEach(button => {
-          const isFav = state.profile.actors[String(id)]?.favorite;
-          button.classList.toggle("active", isFav);
-          button.textContent = isFav ? "♥ Favorite actor" : "♡ Like this actor";
-        });
-        if (state.screen === "list") renderList();
-      }
-
-      function openModal(title, html) {
-        els.modalTitle.textContent = title;
-        els.modalContent.innerHTML = html;
-        els.modalBackdrop.classList.remove("hidden");
-        document.body.style.overflow = "hidden";
-        document.getElementById("modal").scrollTop = 0;
-      }
-
-      function closeModal() {
-        els.modalBackdrop.classList.add("hidden");
-        document.body.style.overflow = "";
-        state.modalItem = null;
-      }
-
-      async function loadProviderChoices() {
-        const host = document.getElementById("serviceChoices");
-        if (!host || !getToken()) return;
-        host.innerHTML = `<div class="loading" style="min-height:100px"><div><div class="spinner"></div>Loading services…</div></div>`;
-        try {
-          const [movies, tv] = await Promise.all([
-            api("/watch/providers/movie", { watch_region: state.profile.settings.region }),
-            api("/watch/providers/tv", { watch_region: state.profile.settings.region })
-          ]);
-          const map = new Map();
-          [...(movies.results || []), ...(tv.results || [])].forEach(p => {
-            if (!map.has(p.provider_id) || Number(p.display_priority || 999) < Number(map.get(p.provider_id).display_priority || 999)) map.set(p.provider_id, p);
-          });
-          state.providers = [...map.values()].sort((a, b) => Number(a.display_priority || 999) - Number(b.display_priority || 999)).slice(0, 50);
-          renderProviderChoices();
-        } catch (error) {
-          host.innerHTML = `<div class="help-text">Could not load streaming services.</div>`;
-        }
-      }
-
-      function renderProviderChoices() {
-        const host = document.getElementById("serviceChoices");
-        if (!host) return;
-        const selected = new Set((state.profile.settings.providerIds || []).map(Number));
-        host.innerHTML = `<div class="service-grid">${state.providers.map(p => `
-          <button class="service-choice ${selected.has(Number(p.provider_id)) ? "selected" : ""}" type="button" data-provider-id="${p.provider_id}">
-            ${p.logo_path ? `<img src="${IMG.logo}${p.logo_path}" alt="">` : ""}
-            <span>${escapeHtml(p.provider_name)}</span>
-          </button>`).join("")}</div>`;
-      }
-
-      function openSettings() {
-        const token = getToken();
-        const settings = state.profile.settings;
-        openModal("Settings", `
-          <div class="setting-group">
-            <h3>Movie database connection</h3>
-            <p class="help-text">Paste your TMDB <strong>API Read Access Token</strong>. It is stored only in this browser. For a public app used by other people, move the token to a protected server function instead.</p>
-            <label class="field-label" for="tokenInput">TMDB Read Access Token</label>
-            <input class="field" id="tokenInput" type="password" autocomplete="off" value="${escapeHtml(token)}" placeholder="eyJhbGciOiJIUzI1NiJ9…">
-            <div class="button-row" style="margin-top:10px">
-              <button class="primary-button" type="button" id="saveToken">Save and test</button>
-              <a class="secondary-button" style="text-decoration:none;text-align:center" href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">Get a token</a>
-            </div>
-            <div class="token-status ${token ? "good" : ""}" id="tokenStatus">${token ? "A token is saved on this device." : "Not connected yet."}</div>
-          </div>
-
-          <div class="setting-group">
-            <h3>Streaming services</h3>
-            <p class="help-text">Choose services you use. Discover picks will favor titles available through one of them. Leave all unselected to search everything.</p>
-            <label class="field-label" for="regionSelect">Country or region</label>
-            <select class="field" id="regionSelect">
-              ${["US","CA","GB","AU","NZ","IE"].map(code => `<option value="${code}" ${settings.region === code ? "selected" : ""}>${code}</option>`).join("")}
-            </select>
-            <div id="serviceChoices" style="margin-top:10px">${token ? "" : `<div class="help-text">Connect TMDB to load services.</div>`}</div>
-          </div>
-
-          <div class="setting-group">
-            <h3>Suggestion rules</h3>
-            <label class="service-choice ${settings.hideWatched ? "selected" : ""}" style="margin-top:9px">
-              <input type="checkbox" id="hideWatched" ${settings.hideWatched ? "checked" : ""}>
-              <span>Hide titles marked watched</span>
-            </label>
-            <label class="service-choice ${settings.allowRewatches ? "selected" : ""}" style="margin-top:8px">
-              <input type="checkbox" id="allowRewatches" ${settings.allowRewatches ? "checked" : ""}>
-              <span>Allow watched favorites to be suggested again</span>
-            </label>
-          </div>
-
-          <div class="setting-group">
-            <h3>Backup your choices</h3>
-            <p class="help-text">Export your saved, watched, liked, and actor choices to a small backup file.</p>
-            <div class="button-row">
-              <button class="secondary-button" id="exportData" type="button">Export backup</button>
-              <button class="secondary-button" id="importData" type="button">Import backup</button>
-              <input id="importFile" class="hidden" type="file" accept="application/json,.json">
-            </div>
-          </div>
-
-          <div class="setting-group">
-            <h3>About the data</h3>
-            <p class="help-text">This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability is powered by JustWatch through TMDB.</p>
-          </div>
-
-          <button class="danger-button wide" type="button" id="clearHistory">Clear all WatchPick history</button>
-        `);
-        bindSettingsEvents();
-        if (token) loadProviderChoices();
-      }
-
-      function bindSettingsEvents() {
-        document.getElementById("saveToken")?.addEventListener("click", async () => {
-          const input = document.getElementById("tokenInput");
-          const status = document.getElementById("tokenStatus");
-          const token = input.value.trim().replace(/^Bearer\s+/i, "");
-          if (!token) {
-            localStorage.removeItem(TOKEN_KEY);
-            status.className = "token-status bad";
-            status.textContent = "Enter a token first.";
-            updateConnectionNotice();
-            return;
-          }
-          status.className = "token-status";
-          status.textContent = "Testing connection…";
-          try {
-            const valid = await testToken(token);
-            if (!valid) throw new Error("bad");
-            localStorage.setItem(TOKEN_KEY, token);
-            status.className = "token-status good";
-            status.textContent = "Connected successfully.";
-            updateConnectionNotice();
-            loadProviderChoices();
-            toast("TMDB connected");
-          } catch {
-            status.className = "token-status bad";
-            status.textContent = "That token was not accepted. Copy the API Read Access Token, not the shorter API key.";
-          }
-        });
-
-        document.getElementById("regionSelect")?.addEventListener("change", event => {
-          state.profile.settings.region = event.target.value;
-          state.profile.settings.providerIds = [];
-          saveProfile();
-          loadProviderChoices();
-        });
-
-        document.getElementById("hideWatched")?.addEventListener("change", event => {
-          state.profile.settings.hideWatched = event.target.checked;
-          saveProfile();
-          event.target.closest("label").classList.toggle("selected", event.target.checked);
-        });
-        document.getElementById("allowRewatches")?.addEventListener("change", event => {
-          state.profile.settings.allowRewatches = event.target.checked;
-          saveProfile();
-          event.target.closest("label").classList.toggle("selected", event.target.checked);
-        });
-
-        document.getElementById("exportData")?.addEventListener("click", exportData);
-        document.getElementById("importData")?.addEventListener("click", () => document.getElementById("importFile").click());
-        document.getElementById("importFile")?.addEventListener("change", importData);
-        document.getElementById("clearHistory")?.addEventListener("click", () => {
-          const ok = confirm("Clear all saved, watched, liked, disliked, and actor choices? This cannot be undone unless you exported a backup.");
-          if (!ok) return;
-          state.profile = defaultProfile();
-          saveProfile();
-          closeModal();
-          els.pickResults.innerHTML = "";
-          renderList();
-          toast("WatchPick history cleared");
-        });
-      }
-
-      function exportData() {
-        const blob = new Blob([JSON.stringify({ app: "WatchPick", version: 1, exportedAt: new Date().toISOString(), profile: state.profile }, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = `watchpick-backup-${new Date().toISOString().slice(0,10)}.json`;
-        anchor.click();
-        URL.revokeObjectURL(url);
-      }
-
-      function importData(event) {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            const data = JSON.parse(String(reader.result || ""));
-            const profile = data.profile || data;
-            if (!profile.items || !profile.settings) throw new Error("invalid");
-            state.profile = {
-              ...defaultProfile(),
-              ...profile,
-              items: profile.items || {},
-              actors: profile.actors || {},
-              settings: { ...defaultProfile().settings, ...(profile.settings || {}) }
-            };
-            saveProfile();
-            closeModal();
-            renderList();
-            toast("Backup imported");
-          } catch {
-            alert("That file does not look like a WatchPick backup.");
-          }
-        };
-        reader.readAsText(file);
-      }
-
-      function handleApiError(error, target) {
-        const code = String(error?.message || "");
-        if (code.includes("TMDB_NOT_CONNECTED")) {
-          target.innerHTML = connectionCard();
-        } else if (code.includes("TMDB_BAD_TOKEN")) {
-          target.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div>Your TMDB token was not accepted. Open settings and replace it with the API Read Access Token.</div>`;
-        } else {
-          target.innerHTML = `<div class="empty-state"><div class="empty-icon">↻</div>WatchPick could not reach the movie database. Check your connection and try again.</div>`;
-        }
-      }
-
-      let toastTimer;
-      function toast(message) {
-        clearTimeout(toastTimer);
-        els.toast.textContent = message;
-        els.toast.classList.add("show");
-        toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2200);
-      }
-
-      function itemFromKey(key) {
-        return state.profile.items[key] || state.runtimeItems[key];
-      }
-
-      document.addEventListener("click", async event => {
-        const nav = event.target.closest("[data-screen]");
-        if (nav) {
-          showScreen(nav.dataset.screen);
-          return;
-        }
-
-        const openMediaButton = event.target.closest("[data-open-media]");
-        if (openMediaButton) {
-          openMedia(openMediaButton.dataset.openMedia, openMediaButton.dataset.id);
-          return;
-        }
-
-        const openPersonButton = event.target.closest("[data-open-person]");
-        if (openPersonButton) {
-          openPerson(openPersonButton.dataset.openPerson);
-          return;
-        }
-
-        const favoriteButton = event.target.closest("[data-favorite-person]");
-        if (favoriteButton) {
-          event.stopPropagation();
-          const id = favoriteButton.dataset.favoritePerson;
-          await favoritePerson(id);
-          return;
-        }
-
-        const quick = event.target.closest("[data-quick]");
-        if (quick) {
-          const item = itemFromKey(quick.dataset.key) || (() => {
-            const [media_type, id] = quick.dataset.key.split(":");
-            return { id: Number(id), media_type, title: "Saved title" };
-          })();
-          if (quick.dataset.quick === "save") toggleSaved(item);
-          if (quick.dataset.quick === "watched") toggleWatched(item);
-          return;
-        }
-
-        const settingsButton = event.target.closest("[data-open-settings]");
-        if (settingsButton) {
-          openSettings();
-          return;
-        }
-
-        const providerButton = event.target.closest("[data-provider-id]");
-        if (providerButton) {
-          const id = Number(providerButton.dataset.providerId);
-          const ids = new Set((state.profile.settings.providerIds || []).map(Number));
-          if (ids.has(id)) ids.delete(id); else ids.add(id);
-          state.profile.settings.providerIds = [...ids];
-          saveProfile();
-          renderProviderChoices();
-          return;
-        }
-
-        const reaction = event.target.closest("[data-reaction]");
-        if (reaction && state.modalItem) {
-          setReaction(state.modalItem, reaction.dataset.reaction);
-          return;
-        }
-
-        const detailAction = event.target.closest("[data-detail-action]");
-        if (detailAction && state.modalItem) {
-          if (detailAction.dataset.detailAction === "save") toggleSaved(state.modalItem);
-          if (detailAction.dataset.detailAction === "watched") toggleWatched(state.modalItem);
-          renderDetailActions(state.modalItem);
-        }
+      micBtn.addEventListener("click", () => {
+        if (listening) { recognition.stop(); return; }
+        document.getElementById("searchInput").blur();
+        try { recognition.start(); } catch (_) {}
       });
-
-      document.querySelectorAll("#mediaChoice button").forEach(button => {
-        button.addEventListener("click", () => {
-          state.media = button.dataset.media;
-          document.querySelectorAll("#mediaChoice button").forEach(b => b.classList.toggle("active", b === button));
-        });
-      });
-
-      document.querySelectorAll("#moodChoice button").forEach(button => {
-        button.addEventListener("click", () => {
-          state.mood = button.dataset.mood;
-          document.querySelectorAll("#moodChoice button").forEach(b => b.classList.toggle("active", b === button));
-        });
-      });
-
-      document.querySelectorAll("#listTabs button").forEach(button => {
-        button.addEventListener("click", () => {
-          state.list = button.dataset.list;
-          document.querySelectorAll("#listTabs button").forEach(b => b.classList.toggle("active", b === button));
-          renderList();
-        });
-      });
-
-      document.getElementById("makePicks").addEventListener("click", makePicks);
-      document.getElementById("openSettings").addEventListener("click", openSettings);
-      document.getElementById("closeModal").addEventListener("click", closeModal);
-      els.modalBackdrop.addEventListener("click", event => {
-        if (event.target === els.modalBackdrop) closeModal();
-      });
-      document.addEventListener("keydown", event => {
-        if (event.key === "Escape" && !els.modalBackdrop.classList.contains("hidden")) closeModal();
-      });
-
-      document.getElementById("searchForm").addEventListener("submit", event => {
-        event.preventDefault();
-        runSearch(els.searchInput.value);
-      });
-
-      updateConnectionNotice();
-      updateLearningNote();
-      renderList();
     })();
+    document.getElementById("addBtn").addEventListener("click", () => {
+      if (placementMode) {
+        placementMode = false;
+        pendingLatLng = null;
+        mapTip.classList.remove("show");
+        document.getElementById("addBtn").classList.remove("active");
+        toast("Pin placement canceled.");
+      } else startAdd();
+    });
+    document.getElementById("pinsBtn").addEventListener("click", showPins);
+    document.getElementById("scheduleBtn").addEventListener("click", showSchedule);
+    document.getElementById("planBtn").addEventListener("click", () => showTripPlanner());
+    document.getElementById("moreBtn").addEventListener("click", showDashboard);
+    document.getElementById("menuBtn").addEventListener("click", showDashboard);
+    document.getElementById("jumpStrip").addEventListener("click", event => {
+      const button = event.target.closest("[data-jump]");
+      if (!button) return;
+      const neighborhood = NEIGHBORHOODS[button.dataset.jump];
+      if (!neighborhood) return;
+      showNeighborhood(neighborhood, true);
+      toast(`Showing ${neighborhood.label}.`);
+      if (settings.transitVisible) setTimeout(loadTransitStops, 900);
+    });
+    backdrop.addEventListener("click", closeSheet);
+    document.getElementById("importInput").addEventListener("change", event => importData(event.target.files?.[0]));
+
+    sheet.addEventListener("submit", event => {
+      if (event.target.id === "placeForm") { event.preventDefault(); saveForm(event.target); }
+      if (event.target.id === "eventForm") { event.preventDefault(); saveEvent(event.target); }
+      if (event.target.id === "tripForm") { event.preventDefault(); launchTrip(event.target, "transit"); }
+      if (event.target.id === "meetForm") { event.preventDefault(); runMeetMe(event.target); }
+      if (event.target.id === "findMeEnterForm") { event.preventDefault(); submitFindMeCode(new FormData(event.target).get("code") || ""); }
+    });
+
+    sheet.addEventListener("click", event => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const action = button.dataset.action;
+      const id = button.dataset.id;
+
+      if (action === "close") closeSheet();
+      if (action === "open-place") { closeSheet(); const p = places.find(x => x.id === id); if (p) { setMapView(p.lat, p.lng, Math.max(map.getZoom(), 16)); showPlace(id); } }
+      if (action === "edit") { const p = places.find(x => x.id === id); if (p) { editingId = id; pendingLatLng = { lat: p.lat, lng: p.lng }; showEditForm(p); } }
+      if (action === "delete") deletePlace(id);
+      if (action === "directions") { const p = places.find(x => x.id === id); if (p) openDirections(p, button.dataset.mode); }
+      if (action === "share") { const p = places.find(x => x.id === id); if (p) sharePlace(p); }
+      if (action === "filter") { activeFilter = button.dataset.filter || "all"; renderMarkers(); showPins(); }
+
+      if (action === "export") exportData();
+      if (action === "import") document.getElementById("importInput").click();
+      if (action === "center-uw") { closeSheet(); setMapView(UW.lat, UW.lng, 15); }
+      if (action === "help") showHelp();
+      if (action === "transit-to-stop") {
+        const p = { lat: Number(button.dataset.lat), lng: Number(button.dataset.lng) };
+        openDirections(p, "transit");
+      }
+      if (action === "save-transit-stop") {
+        const lat = Number(button.dataset.lat), lng = Number(button.dataset.lng);
+        closeSheet();
+        startAdd({ lat, lng }, { title: button.dataset.name || "Transit stop", category: "transit", address: "" });
+      }
+      if (action === "show-schedule") showSchedule();
+      if (action === "add-event") showEventForm();
+      if (action === "edit-event") { const e=schedule.find(x=>x.id===id); if(e)showEventForm(e); }
+      if (action === "delete-event") { if(confirm("Delete this schedule item?")){ schedule=schedule.filter(x=>x.id!==id); saveSchedule(); showSchedule(); } }
+      if (action === "plan-event") showTripPlanner("", id);
+      if (action === "plan-to-place") showTripPlanner(id);
+      if (action === "open-walk-plan") { const form=document.getElementById("tripForm"); if(form)launchTrip(form,"walking"); }
+      if (action === "show-neighborhoods") showNeighborhoods();
+      if (action === "jump-neighborhood") { const n=NEIGHBORHOODS[button.dataset.key]; if(n){closeSheet();showNeighborhood(n, true);toast(`Showing ${n.label}.`);} }
+      if (action === "show-meet") showMeetMe();
+      if (action === "show-findme") showFindMe();
+      if (action === "findme-create") createFindMeCode();
+      if (action === "findme-toggle") toggleFindMeSharing();
+      if (action === "findme-unpair") { if (confirm("Unpair from this person? You'll need a new code to pair again.")) unpairFindMe(); }
+      if (action === "findme-share-code") { shareCodeViaSystemShare(button.dataset.code); showFindMe(); }
+      if (action === "go-category") goCategory(button.dataset.category);
+      if (action === "show-school") goCategory("school");
+      if (action === "toggle-transit") { closeSheet(); toggleTransit(); }
+      if (action === "locate") { closeSheet(); locateUser(true); }
+    });
+
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+    }
+
+    setTimeout(() => {
+      if (!settings.welcomed) {
+        settings.welcomed = true; saveSettings();
+        openSheet(`<div class="sheet-head"><h2>Welcome to MyMap</h2><button class="close-btn" data-action="close">×</button></div><div class="place-note">Press the purple <strong>+</strong> button to add your home location, work location, school, and each campus building or destination you regularly visit.</div><div class="place-note">Use <strong>Schedule</strong> for classes, work shifts, appointments, and regular trips. Use <strong>Plan</strong> for Leave Now or Arrive By transit directions.</div><button class="btn primary" data-action="close">Start using MyMap</button>`);
+      } else if (!places.length) showTip("Press + to add your home, work, school, campus buildings, and favorite places.", 4800);
+    }, 900);
+  })();
   </script>
 </body>
 </html>
