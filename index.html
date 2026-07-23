@@ -1978,29 +1978,40 @@
           </button>`).join("")}</div>`;
       }
 
-      function isInstalledApp() {
-        return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
-      }
+      async function checkMovieConnection() {
+        const status = document.getElementById("movieConnectionStatus");
+        const button = document.getElementById("checkMovieConnection");
+        if (!status) return;
 
-      let deferredInstallPrompt = null;
-      window.addEventListener("beforeinstallprompt", event => {
-        event.preventDefault();
-        deferredInstallPrompt = event;
-      });
-      window.addEventListener("appinstalled", () => {
-        deferredInstallPrompt = null;
-        toast("WatchPick installed");
-      });
+        status.className = "token-status";
+        status.textContent = "Checking the private Supabase connection…";
+        if (button) button.disabled = true;
+
+        try {
+          await api("/trending/movie/week", { page: 1 });
+          status.className = "token-status good";
+          status.textContent = "✓ Connected. WatchPick is using the private TMDB token stored in Supabase.";
+        } catch (error) {
+          status.className = "token-status bad";
+          const message = String(error?.message || "");
+          if (message.toLowerCase().includes("not configured")) {
+            status.textContent = "Not connected yet. In Supabase, add the Edge Function secret named TMDB_TOKEN, then tap Check again.";
+          } else {
+            status.textContent = "Could not reach the movie database. Check that watchpick-tmdb is deployed, Verify JWT is off, and the TMDB_TOKEN secret is saved.";
+          }
+        } finally {
+          if (button) button.disabled = false;
+        }
+      }
 
       function openSettings() {
         const settings = state.profile.settings;
-        const installed = isInstalledApp();
         openModal("Settings", `
           <div class="setting-group">
-            <h3>Install WatchPick</h3>
-            <p class="help-text">Install it on your phone so it opens like an app and has its own home-screen icon.</p>
-            <button class="primary-button wide" type="button" id="installApp" ${installed ? "disabled" : ""}>${installed ? "Already installed" : "Install WatchPick"}</button>
-            <p class="help-text" id="installHelp" style="margin-top:7px">${installed ? "You are using the installed app." : "If the install button is not available yet, use your browser menu and choose Add to Home screen or Install app."}</p>
+            <h3>Movie database connection</h3>
+            <p class="help-text">WatchPick uses the shared <strong>watchpick-tmdb</strong> Edge Function in your Supabase project. The private TMDB token belongs in Supabase under the secret name <strong>TMDB_TOKEN</strong>—not inside this app.</p>
+            <button class="secondary-button wide" type="button" id="checkMovieConnection">Check connection</button>
+            <p class="token-status" id="movieConnectionStatus">Checking the private Supabase connection…</p>
           </div>
 
           <div class="setting-group">
@@ -2045,29 +2056,12 @@
           <button class="danger-button wide" type="button" id="clearHistory">Clear all WatchPick history</button>
         `);
         bindSettingsEvents();
+        checkMovieConnection();
         loadProviderChoices();
       }
 
       function bindSettingsEvents() {
-        document.getElementById("installApp")?.addEventListener("click", async () => {
-          const button = document.getElementById("installApp");
-          const help = document.getElementById("installHelp");
-          if (isInstalledApp()) return;
-          if (!deferredInstallPrompt) {
-            if (help) help.textContent = "Open your browser menu and choose Add to Home screen or Install app.";
-            return;
-          }
-          button.disabled = true;
-          deferredInstallPrompt.prompt();
-          const choice = await deferredInstallPrompt.userChoice.catch(() => null);
-          deferredInstallPrompt = null;
-          button.disabled = false;
-          if (choice?.outcome === "accepted") {
-            button.textContent = "Installing…";
-          } else if (help) {
-            help.textContent = "Installation was canceled. You can try again from the browser menu.";
-          }
-        });
+        document.getElementById("checkMovieConnection")?.addEventListener("click", checkMovieConnection);
 
         document.getElementById("regionSelect")?.addEventListener("change", event => {
           state.profile.settings.region = event.target.value;
